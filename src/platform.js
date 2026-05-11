@@ -265,10 +265,12 @@ function launchIDE(workspace, port = 9333) {
                 default: // linux
                     if (isRunning) {
                         // IDE is already running with CDP on the port.
-                        // Cannot pass --remote-debugging-port again (bind conflict).
-                        // Use the raw binary without port flag — it sends IPC to the
-                        // existing instance to open a new window.
-                        cmd = `"${binary}" ${wsArg}`;
+                        // Cannot launch raw binary again — it tries to init a GUI
+                        // and crashes if Wayland is unavailable (e.g. disabled for RustDesk).
+                        // Instead, use ELECTRON_RUN_AS_NODE + cli.js to send IPC to the
+                        // running instance. This only sends a message, no GUI needed.
+                        const cliJs = `${path.dirname(binary)}/resources/app/out/cli.js`;
+                        cmd = `ELECTRON_RUN_AS_NODE=1 "${binary}" "${cliJs}" ${wsArg}`;
                     } else {
                         // First launch — use raw binary with debugging port.
                         cmd = `nohup "${binary}" --remote-debugging-port=${port} ${wsArg} > /dev/null 2>&1 &`;
@@ -277,9 +279,9 @@ function launchIDE(workspace, port = 9333) {
 
             console.log(`[platform] launchIDE cmd: ${cmd}`);
 
-            // Strip VSCODE_* env vars so the CLI wrapper doesn't get confused
-            // by stale IPC hooks inherited from the parent IDE process.
-            // PM2 inherits these when the bot is started from an IDE terminal.
+            // Strip VSCODE_* and WAYLAND env vars to avoid conflicts.
+            // PM2 inherits stale VSCODE_* from the IDE terminal, and
+            // WAYLAND_DISPLAY can cause crashes if Wayland was disabled.
             const cleanEnv = { ...process.env };
             delete cleanEnv.VSCODE_IPC_HOOK;
             delete cleanEnv.VSCODE_IPC_HOOK_CLI;
@@ -287,7 +289,7 @@ function launchIDE(workspace, port = 9333) {
             delete cleanEnv.VSCODE_CWD;
             delete cleanEnv.VSCODE_NLS_CONFIG;
             delete cleanEnv.VSCODE_CODE_CACHE_PATH;
-            delete cleanEnv.ELECTRON_RUN_AS_NODE;
+            delete cleanEnv.WAYLAND_DISPLAY;
 
             exec(cmd, { env: cleanEnv }, (err) => {
                 if (err) {
