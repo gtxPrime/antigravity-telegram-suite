@@ -9,6 +9,10 @@ const { config, isIDERunning, killIDE, cleanLockFile, launchIDE, trustWorkspaceV
 const { isAgentWorking, getFullLatestResponse, snapshotChatState, captureAgentScreenshot, captureFullIDEScreenshot, waitForAgentResponse, sendViaCDP, triggerNewChat, triggerModelMenu, getAvailableModels, selectModel, getCurrentModel, stopAgent, getQuota, listWindows, setPreferredWindow, getPreferredWindow, getCachedWindows, closeWindow, listAgentThreads, switchAgentThread, getActiveThreadId, getActiveThreadInfo, setActiveWorkspace } = require('./cdp_controller');
 const autoaccept = require('./autoaccept');
 const updater = require('./updater');
+const { runTurboOrchestration } = require('./turbo_orchestrator');
+
+let isTurboMode = false;
+let turboPinnedMsgId = null;
 
 let cachedAgentThreads = [];
 let cachedArtifacts = [];
@@ -589,33 +593,60 @@ const handleArtifacts = async (ctx) => {
             return ctx.reply(t('artifacts.no_active_thread') || '⚠️ No active thread found. Please select a thread in the IDE first.');
         }
 
-        const artifactsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain', activeId);
-        if (!fs.existsSync(artifactsDir)) {
+        const conversationDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain', activeId);
+        if (!fs.existsSync(conversationDir)) {
             return ctx.reply(t('artifacts.no_artifacts') || 'ℹ️ No artifacts found for the current thread.');
         }
 
-        const items = fs.readdirSync(artifactsDir, { withFileTypes: true });
         cachedArtifacts = [];
         
-        for (const item of items) {
-            if (item.isDirectory()) continue;
-            const name = item.name;
-            if (name.includes('.metadata.json') || name.includes('.resolved') || name.startsWith('.sys')) {
-                continue;
-            }
-            if (name.endsWith('.md') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.webp') || name.endsWith('.mp4') || name.endsWith('.mov')) {
-                cachedArtifacts.push({ name, path: path.join(artifactsDir, name) });
+        // Helper to check if a file should be listed as an artifact
+        const ARTIFACT_EXTENSIONS = ['.md', '.png', '.jpg', '.jpeg', '.webp', '.mp4', '.mov', '.gif', '.pdf', '.txt', '.json', '.csv', '.html'];
+        const isArtifactFile = (name) => {
+            if (name.includes('.metadata.json') || name.includes('.resolved') || name.startsWith('.sys') || name.startsWith('.')) return false;
+            return ARTIFACT_EXTENSIONS.some(ext => name.endsWith(ext));
+        };
+
+        // 1. Primary: Scan artifacts/ subdirectory (new Antigravity UI structure)
+        const artifactsSubDir = path.join(conversationDir, 'artifacts');
+        if (fs.existsSync(artifactsSubDir)) {
+            const items = fs.readdirSync(artifactsSubDir, { withFileTypes: true });
+            for (const item of items) {
+                if (item.isDirectory()) continue;
+                if (isArtifactFile(item.name)) {
+                    cachedArtifacts.push({ name: item.name, path: path.join(artifactsSubDir, item.name) });
+                }
             }
         }
 
-        // Also scan the scratch/ subdirectory for temporary files
-        const scratchDir = path.join(artifactsDir, 'scratch');
+        // 2. Also scan conversation root for stray files (e.g. browser recordings)
+        const rootItems = fs.readdirSync(conversationDir, { withFileTypes: true });
+        for (const item of rootItems) {
+            if (item.isDirectory()) continue;
+            if (isArtifactFile(item.name)) {
+                cachedArtifacts.push({ name: item.name, path: path.join(conversationDir, item.name) });
+            }
+        }
+
+        // 3. Scan scratch/ subdirectory for temporary files
+        const scratchDir = path.join(conversationDir, 'scratch');
         if (fs.existsSync(scratchDir)) {
             const scratchItems = fs.readdirSync(scratchDir, { withFileTypes: true });
             for (const item of scratchItems) {
                 if (item.isDirectory()) continue;
-                const name = item.name;
-                cachedArtifacts.push({ name: `scratch/${name}`, path: path.join(scratchDir, name) });
+                cachedArtifacts.push({ name: `scratch/${item.name}`, path: path.join(scratchDir, item.name) });
+            }
+        }
+
+        // 4. Scan browser/ subdirectory for browser recordings
+        const browserDir = path.join(conversationDir, 'browser');
+        if (fs.existsSync(browserDir)) {
+            const browserItems = fs.readdirSync(browserDir, { withFileTypes: true });
+            for (const item of browserItems) {
+                if (item.isDirectory()) continue;
+                if (isArtifactFile(item.name)) {
+                    cachedArtifacts.push({ name: `🌐 ${item.name}`, path: path.join(browserDir, item.name) });
+                }
             }
         }
 
@@ -1411,6 +1442,37 @@ bot.command('update', async (ctx) => {
     }
 });
 
+// ===== TURBO / COUNCIL MODE =====
+
+bot.command('turbo', async (ctx) => {
+    const parts = ctx.message.text.split(' ');
+    const subCommand = parts[1] ? parts[1].toLowerCase() : 'on';
+
+    if (subCommand === 'off') {
+        isTurboMode = false;
+        if (turboPinnedMsgId) {
+            try {
+                await ctx.telegram.unpinChatMessage(ctx.chat.id, turboPinnedMsgId);
+                turboPinnedMsgId = null;
+            } catch (e) {}
+        }
+        await ctx.reply('🛑 <b>Turbo Mod Kapatıldı.</b>\nNormal asistan moduna dönüldü.', { parse_mode: 'HTML' });
+    } else {
+        isTurboMode = true;
+        const msg = await ctx.reply(
+            '⚡ <b>TURBO MOD AKTİF</b> ⚡\n\n' +
+            '⚠️ <b>Dikkat:</b> Bu modda gönderdiğiniz talepler Claude ve Gemini tarafından sırayla (Planlama -> Kodlama) ' +
+            'işlenecektir. Kodlar kendi aralarında düzenlenip inceleneceği için <b>daha fazla token harcanır.</b>\n\n' +
+            'Bu modu kapatmak için <code>/turbo off</code> yazabilirsiniz.', 
+            { parse_mode: 'HTML' }
+        );
+        turboPinnedMsgId = msg.message_id;
+        try {
+            await ctx.telegram.pinChatMessage(ctx.chat.id, turboPinnedMsgId);
+        } catch (e) {}
+    }
+});
+
 // ===== TEXT MESSAGE HANDLER (Headless mode) =====
 
 bot.command('panel', async (ctx) => {
@@ -1434,29 +1496,37 @@ bot.on('text', (ctx) => {
     
     (async () => {
         try {
-            const targetId = await sendViaCDP(query, CDP_PORT, explicitTargetId);
-            await ctx.reply(t('ask.sent'));
+            let targetId = explicitTargetId;
+            let text = "";
 
-            // Wait briefly for message to render in DOM before anchoring state
-            await new Promise(r => setTimeout(r, 1500));
-            await snapshotChatState(CDP_PORT).catch(() => {});
-            
-            const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx), targetId);
-            if (isDone) {
-                let text = await getFullLatestResponse(CDP_PORT, targetId);
-                text = stripQueryFromResponse(text, query);
-                if (!text) text = t('ask.done_empty');
-                const header = await getChatHeader(targetId, t('ask.done'));
-                
-                const buttons = await buildMainMenu();
-                
-                const sentIds = await sendLongMessage(ctx, text, header, buttons, ctx.message.message_id);
-                if (sentIds && sentIds.length > 0 && targetId) {
-                    sentIds.forEach(id => messageTargetMap.set(id, targetId));
-                    saveMessageTargetMap(messageTargetMap);
-                }
+            if (isTurboMode) {
+                text = await runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, createProgressHandler, stripQueryFromResponse);
+                // In turbo mode, targetId might not be returned directly, so we just use the explicit one if we have it
             } else {
-                await ctx.reply(t('ask.timeout'));
+                targetId = await sendViaCDP(query, CDP_PORT, explicitTargetId);
+                await ctx.reply(t('ask.sent'));
+
+                // Wait briefly for message to render in DOM before anchoring state
+                await new Promise(r => setTimeout(r, 1500));
+                await snapshotChatState(CDP_PORT).catch(() => {});
+                
+                const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx), targetId);
+                if (isDone) {
+                    text = await getFullLatestResponse(CDP_PORT, targetId);
+                    text = stripQueryFromResponse(text, query);
+                } else {
+                    return await ctx.reply(t('ask.timeout'));
+                }
+            }
+
+            if (!text) text = t('ask.done_empty');
+            const header = await getChatHeader(targetId, t('ask.done'));
+            const buttons = await buildMainMenu();
+            
+            const sentIds = await sendLongMessage(ctx, text, header, buttons, ctx.message.message_id);
+            if (sentIds && sentIds.length > 0 && targetId) {
+                sentIds.forEach(id => messageTargetMap.set(id, targetId));
+                saveMessageTargetMap(messageTargetMap);
             }
         } catch(err) {
             const errorMsg = err.message === 'no_chat_input' ? t('ask.no_chat_input') : err.message;
