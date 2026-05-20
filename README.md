@@ -2,15 +2,19 @@
 
 # 🤖 Antigravity Telegram Suite
 
+**Works with both [Antigravity Standalone App](https://antigravity.google/)\* and [Antigravity IDE](https://antigravity.google/).**
+
 🌍 Languages: [English](README.md) | [Türkçe](README.tr.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md)
 
-**Control your [Antigravity IDE](https://antigravity.google/) remotely via Telegram.**
-
-Send messages, switch AI models, manage workspaces, take screenshots — all from your phone.
+Control your Antigravity AI agent remotely via Telegram.
+Send messages, switch AI models, manage workspaces, take screenshots, and run multi-agent workflows — all from your phone.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-green.svg)](https://nodejs.org)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
+[![Version](https://img.shields.io/badge/Version-3.1.0-orange.svg)]()
+
+\* *Some features may have limitations on the Standalone App. See [Known Issues](#-known-issues).*
 
 </div>
 
@@ -22,23 +26,28 @@ Send messages, switch AI models, manage workspaces, take screenshots — all fro
 |---|---|
 | 💬 **Headless Chat** | Send messages directly to the AI agent via Telegram |
 | 📎 **File & Image Upload** | Forward files/images to the agent with captions |
-| 📸 **IDE Screenshots** | Capture and receive IDE screenshots remotely |
-| 🤖 **Model Switching** | Change AI models (Gemini, Claude) with inline buttons |
+| 📸 **IDE Screenshots** | Capture and receive screenshots remotely |
+| 🤖 **Model Switching** | Change AI models (Gemini, Claude, GPT) with inline buttons |
 | 📂 **File Explorer** | Browse, navigate, and download project files |
 | 🔄 **Workspace Management** | Switch between projects without touching the keyboard |
-| 💬 **Multi-Agent Focus** | Reply to specific agents directly from Telegram, or lock focus to a single project window |
-| ⚡ **Auto-Accept** | Automatically click Run, Accept, Allow, Continue buttons |
+| 🪟 **Multi-Window Support** | Route commands to a specific IDE window when multiple are open |
+| 💬 **Thread Management** | List, switch, and manage chat threads (agent conversations) |
+| ⚡ **Auto-Accept** | Automatically click Run, Accept, Allow, Continue buttons via a DOM MutationObserver |
+| 🚀 **Turbo Mode** | Multi-agent orchestration: Claude plans → Gemini codes → Claude reviews → Gemini fixes |
 | 🔄 **Auto-Update** | Check for updates and self-update with one command |
-| 🌐 **Multi-Language** | English and Turkish UI (extensible) |
-| ⌨️ **Typing Indicator** | Shows "typing..." instead of spamming progress messages |
-| 🖥️ **Cross-Platform** | Works on Linux, macOS (Intel), and Windows |
+| 🌐 **Multi-Language** | 5 languages supported: English, Turkish, German, Spanish, French |
+| ⌨️ **Typing Indicator** | Shows "typing..." in Telegram while the agent is working |
+| 🖥️ **Cross-Platform** | Works on Linux, macOS (Intel & Apple Silicon), and Windows |
+| 🔀 **Dual App Support** | Seamlessly switch between Antigravity IDE and Standalone Agent App |
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
-- [Antigravity IDE](https://antigravity.google/) installed
+- [Antigravity IDE](https://antigravity.google/) and/or [Antigravity Standalone App](https://antigravity.google/) installed
 - A Telegram bot token (get one from [@BotFather](https://t.me/BotFather))
 
 ### 1. Clone & Install
@@ -58,19 +67,37 @@ cp .env.example .env
 Edit `.env` with your values:
 
 ```env
+# Telegram
 BOT_TOKEN=your_telegram_bot_token
 ALLOWED_CHAT_ID=your_chat_id
-DEBUGGING_PORT=9333
+
+# CDP Debugging Ports (must match the --remote-debugging-port used when launching)
+AGENT_CDP_PORT=9333    # Port for the Standalone Antigravity App
+IDE_CDP_PORT=9334      # Port for the Antigravity IDE
+
+# Default AI model to select on new chat
+DEFAULT_MODEL=Gemini 3.1 Pro (High)
+
+# Language: en | tr | de | es | fr
 LANGUAGE=en
+
+# Preferred app target: 'agent' (Standalone) or 'ide' (IDE)
+ANTIGRAVITY_PREFERRED_APP=ide
+
+# Enable auto-accept by default
+AUTOACCEPT_DEFAULT=true
 ```
 
 > 💡 Send `/start` to your bot to get your Chat ID.
 
-### 3. Launch the IDE with CDP
+### 3. Launch the App with CDP
 
-The bot communicates with the IDE via Chrome DevTools Protocol. Launch Antigravity with:
+The bot communicates with Antigravity via Chrome DevTools Protocol (CDP). You must launch the app with a debugging port.
+
+**If running both apps side-by-side, use different ports:**
 
 ```bash
+# --- Standalone Antigravity App ---
 # Linux
 antigravity --remote-debugging-port=9333
 
@@ -80,6 +107,20 @@ open -a Antigravity --args --remote-debugging-port=9333
 # Windows
 Antigravity.exe --remote-debugging-port=9333
 ```
+
+```bash
+# --- Antigravity IDE ---
+# Linux
+antigravity-ide --remote-debugging-port=9334
+
+# macOS
+open -a "Antigravity IDE" --args --remote-debugging-port=9334
+
+# Windows
+"Antigravity IDE.exe" --remote-debugging-port=9334
+```
+
+> ⚠️ The port numbers must match `AGENT_CDP_PORT` and `IDE_CDP_PORT` in your `.env` file.
 
 ### 4. Start the Bot
 
@@ -106,78 +147,140 @@ bash scripts/install.sh
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
+---
+
 ## 📱 Commands
+
+### Core Commands
 
 | Command | Description |
 |---|---|
 | *(any text)* | Send directly to the AI agent |
-| `/latest` | Get the latest agent response |
-| `/screenshot` | Take an IDE screenshot |
-| `/status` | System status (IDE, CDP, Bot) |
-| `/start_ide` | Start the IDE remotely |
-| `/close` | Fully close the IDE |
+| `/latest` | Get the latest agent response as text |
+| `/screenshot` | Take a screenshot of the active agent window |
+| `/status` | Show system status (IDE, CDP connection, Bot) |
+| `/stop` | Stop the currently running agent |
 | `/new` | Open a new chat session |
-| `/model` | Switch AI model |
-| `/workspace` | Switch project workspace |
-| `/window` | Select specific IDE window (multi-window support) |
-| `/file` | Browse & download project files |
-| `/quota` | Check AI credits and model usage limits |
-| `/autoaccept` | Toggle auto-accept (on/off/status) |
-| `/lang` | Switch language (EN/TR) |
-| `/stop` | Stop the running agent |
+
+### AI Model & Agent
+
+| Command | Description |
+|---|---|
+| `/model` | Switch AI model (Gemini, Claude, etc.) |
+| `/turbo` | Toggle **Turbo Mode** — multi-agent orchestration (see below) |
 | `/agents` | List and switch between chat threads |
-| `/artifacts` | List and download artifacts from current thread |
-| `/update` | Check for updates and auto-update |
+| `/quota` | Check AI credits and model usage limits |
+
+### App & Window Management
+
+| Command | Description |
+|---|---|
+| `/start_ide` | Start the Antigravity IDE remotely |
+| `/start_ag` | Start the Standalone Antigravity Agent App |
+| `/close_ide` | Close the Antigravity IDE |
+| `/close_ag` | Close the Standalone Agent App |
+| `/close` | Close the currently active app |
+| `/app` | Switch between IDE and Standalone Agent (`ANTIGRAVITY_PREFERRED_APP`) |
+| `/window` | Select a specific window when multiple are open |
+| `/workspace` | Switch project workspace |
+| `/restart` | Restart the bot process (PM2) |
+
+### Files & Utilities
+
+| Command | Description |
+|---|---|
+| `/file` | Browse & download project files |
+| `/artifacts` | List and download artifacts from the current thread |
+| `/autoaccept` | Toggle auto-accept (on / off / status) |
+| `/lang` | Switch display language |
+| `/update` | Check for updates and auto-update the bot |
 | `/version` | Show current version info |
-| `/menu` | Update Telegram command menu |
-| `/start_ag` | Start Standalone Agent |
-| `/close_ag` | Close Standalone Agent |
-| `/close_ide` | Close IDE |
-| `/app` | Switch between IDE and Agent |
-| `/turbo` | Toggle Turbo Mode |
-| `/restart` | Restart the bot |
-| `/fix_shortcuts` | Fix desktop shortcuts |
+| `/menu` | Update the Telegram command menu |
+| `/fix_shortcuts` | Repair desktop shortcuts for Antigravity apps |
+
+---
+
+## 🚀 Turbo Mode (Multi-Agent Orchestration)
+
+Turbo Mode runs an **Agents Council** workflow that coordinates multiple AI models automatically:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        TURBO MODE PIPELINE                         │
+│                                                                     │
+│  Phase 1: PLANNING        Claude Opus → Creates implementation plan │
+│  Phase 2: CODING          Gemini Pro  → Writes the code             │
+│  Phase 3: REVIEW          Claude Opus → Security & code review      │
+│  Phase 4: FIX (if needed) Gemini Pro  → Fixes issues found          │
+│  Phase 5: SUMMARY         Gemini Pro  → Executive summary for user  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**How to use:**
+1. Enable Turbo Mode: `/turbo` → Select "Enable"
+2. Send your request as normal text
+3. The bot will automatically switch models and run all phases
+4. You'll receive real-time phase updates and a final summary
+
+> 💡 Turbo Mode requires access to both Claude and Gemini models in your Antigravity subscription.
+
+---
 
 ## 🏗️ Architecture
 
 ```
 antigravity-telegram-suite/
 ├── src/
-│   ├── index.js             # Main bot logic & Telegram handlers
+│   ├── index.js              # Main bot logic & Telegram command handlers
 │   ├── cdp_controller.js     # Chrome DevTools Protocol communication
-│   ├── autoaccept.js         # Auto-accept button clicker via CDP
-│   ├── turbo_orchestrator.js # Multi-agent Turbo Mode orchestration
+│   ├── autoaccept.js         # Auto-accept button clicker via CDP MutationObserver
+│   ├── turbo_orchestrator.js # Multi-agent Turbo Mode (Agents Council) orchestration
 │   ├── updater.js            # Self-update module (git pull + pm2 restart)
-│   ├── ui_locators.js        # DOM element locators for IDE interaction
+│   ├── ui_locators.js        # DOM element locators for IDE/Agent UI interaction
 │   ├── i18n.js               # Internationalization module
-│   └── platform.js           # Cross-platform OS abstraction
+│   └── platform.js           # Cross-platform OS abstraction (launch, close, paths)
 ├── locales/
-│   ├── en.json               # English strings
-│   ├── tr.json               # Turkish strings
-│   ├── de.json               # German strings
-│   ├── es.json               # Spanish strings
-│   └── fr.json               # French strings
+│   ├── en.json               # English
+│   ├── tr.json               # Turkish
+│   ├── de.json               # German
+│   ├── es.json               # Spanish
+│   └── fr.json               # French
 ├── scripts/
-│   ├── install.sh          # Linux/macOS installer
-│   └── install.ps1         # Windows installer
-├── .env.example            # Environment template
+│   ├── install.sh            # Linux/macOS installer
+│   └── install.ps1           # Windows installer
+├── .env.example              # Environment variable template
+├── CHANGELOG.md              # Release history
 └── package.json
 ```
 
 ### How It Works
 
 ```
-┌──────────┐     Telegram API     ┌──────────────┐     CDP (WebSocket)     ┌─────────────┐
-│ Telegram │ ◄──────────────────► │ Antigravity  │ ◄────────────────────► │ Antigravity  │
-│   App    │     Bot Commands     │     Bot      │    DOM Interaction     │     IDE      │
-└──────────┘                      └──────────────┘                        └─────────────┘
+┌──────────┐     Telegram API     ┌──────────────┐     CDP (WebSocket)     ┌─────────────────┐
+│ Telegram │ ◄──────────────────► │ Antigravity  │ ◄────────────────────► │ Antigravity IDE  │
+│   App    │     Bot Commands     │     Bot      │    DOM Interaction     │       or         │
+└──────────┘                      └──────────────┘                        │ Standalone Agent │
+                                                                          └─────────────────┘
 ```
 
 1. You send a message via Telegram
-2. The bot injects text into the IDE's chat input via CDP
-3. The bot monitors the IDE for agent completion (typing indicator shown)
+2. The bot injects your text into the AI agent's chat input via CDP
+3. The bot monitors the agent for completion (typing indicator shown in Telegram)
 4. Once done, the response is extracted and sent back to Telegram
-5. **Auto-Accept**: When enabled, a MutationObserver watches for action buttons (Run, Accept, Allow, Continue) and clicks them automatically — no manual intervention needed
+5. **Auto-Accept**: When enabled, a MutationObserver watches for action buttons (Run, Accept, Allow, Continue) and clicks them automatically
+
+### Dual App Architecture
+
+The bot supports **two Antigravity applications** running simultaneously:
+
+| App | Default Port | Config Key | Description |
+|-----|-------------|------------|-------------|
+| **Standalone Agent** | `9333` | `AGENT_CDP_PORT` | Lightweight chat-focused Antigravity app |
+| **Antigravity IDE** | `9334` | `IDE_CDP_PORT` | Full IDE with editor, terminal, and extensions |
+
+Use `/app` to switch the bot's focus between apps. The `ANTIGRAVITY_PREFERRED_APP` setting in `.env` determines which app the bot targets by default.
+
+---
 
 ## 🌐 Adding a Language
 
@@ -185,14 +288,19 @@ antigravity-telegram-suite/
 2. Translate all string values
 3. Set `LANGUAGE=xx` in your `.env`
 
+---
+
 ## ⚠️ Known Issues
 
 | Issue | Details |
 |-------|---------|
 | **Standalone App Limitations** | Some features (workspace switching, thread management) may not work reliably with the Standalone Antigravity App. **Antigravity IDE is fully supported and recommended.** |
 | **Auto-Update on IDE 2.0** | If Antigravity IDE auto-updates, DOM selectors may break until the bot is also updated. |
+| **Turbo Mode Model Access** | Turbo Mode requires both Claude and Gemini models to be available. If one model is unavailable, the pipeline will fail. |
 
 > 💡 As a developer, I prefer to focus on IDE support. The Standalone App integration is provided on a best-effort basis.
+
+---
 
 ## 🤝 Contributing
 
@@ -202,16 +310,20 @@ antigravity-telegram-suite/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+---
+
 ## 🙏 Acknowledgments
 
-- **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — For the excellent Multi-Window Support feature that added the ability to route commands to specific IDE windows!
-- **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — For the Agent Manager UI locators PR that helped identify the IDE's internal DOM structure for thread management.
-- **[acmavirus/antigravity-telegram-control](https://github.com/acmavirus/antigravity-telegram-control)** — A clean, open-source Telegram integration for Antigravity that served as the foundation for this project.
-- **[yazanbaker94/AntiGravity-AutoAccept](https://github.com/yazanbaker94/AntiGravity-AutoAccept)** — The DOM observer pattern used in the Auto-Accept module was inspired by this project's approach to automated button clicking.
-
+- **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — Multi-Window Support feature
+- **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — Agent Manager UI locators for thread management
+- **[acmavirus/antigravity-telegram-control](https://github.com/acmavirus/antigravity-telegram-control)** — The open-source Telegram integration that served as the foundation for this project
+- **[yazanbaker94/AntiGravity-AutoAccept](https://github.com/yazanbaker94/AntiGravity-AutoAccept)** — DOM observer pattern inspiration for the Auto-Accept module
 
 ## 🌟 Credits & Inspirations
-The multi-agent **Turbo Mode (v3)** orchestration was deeply inspired by the architecture found in the [Agents-Council](https://github.com/interdesigncorp-lab/Agents-Council) repository by Interdesigncorp Lab.
+
+The multi-agent **Turbo Mode** orchestration was inspired by the [Agents-Council](https://github.com/interdesigncorp-lab/Agents-Council) repository by Interdesigncorp Lab.
+
+---
 
 ## 📄 License
 
@@ -220,7 +332,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ---
 
 <div align="center">
-Made with ❤️ by [Emre Türkmen](https://emreturkmen.com) for remote developers who code from their couch.
+Made with ❤️ by <a href="https://emreturkmen.com">Emre Türkmen</a> for remote developers who code from their couch.
 
 **Hey Google, if you would like to give me a job you can contact me at [hello@emreturkmen.com](mailto:hello@emreturkmen.com) 😂**
 </div>
