@@ -130,22 +130,33 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 | `/update` | Check for updates and auto-update |
 | `/version` | Show current version info |
 | `/menu` | Update Telegram command menu |
+| `/start_ag` | Start Standalone Agent |
+| `/close_ag` | Close Standalone Agent |
+| `/close_ide` | Close IDE |
+| `/app` | Switch between IDE and Agent |
+| `/turbo` | Toggle Turbo Mode |
+| `/restart` | Restart the bot |
+| `/fix_shortcuts` | Fix desktop shortcuts |
 
 ## 🏗️ Architecture
 
 ```
 antigravity-telegram-suite/
 ├── src/
-│   ├── index.js           # Main bot logic & Telegram handlers
-│   ├── cdp_controller.js   # Chrome DevTools Protocol communication
-│   ├── autoaccept.js       # Auto-accept button clicker via CDP
-│   ├── updater.js          # Self-update module (git pull + pm2 restart)
-│   ├── ui_locators.js      # DOM element locators for IDE interaction
-│   ├── i18n.js             # Internationalization module
-│   └── platform.js         # Cross-platform OS abstraction
+│   ├── index.js             # Main bot logic & Telegram handlers
+│   ├── cdp_controller.js     # Chrome DevTools Protocol communication
+│   ├── autoaccept.js         # Auto-accept button clicker via CDP
+│   ├── turbo_orchestrator.js # Multi-agent Turbo Mode orchestration
+│   ├── updater.js            # Self-update module (git pull + pm2 restart)
+│   ├── ui_locators.js        # DOM element locators for IDE interaction
+│   ├── i18n.js               # Internationalization module
+│   └── platform.js           # Cross-platform OS abstraction
 ├── locales/
-│   ├── en.json             # English strings
-│   └── tr.json             # Turkish strings
+│   ├── en.json               # English strings
+│   ├── tr.json               # Turkish strings
+│   ├── de.json               # German strings
+│   ├── es.json               # Spanish strings
+│   └── fr.json               # French strings
 ├── scripts/
 │   ├── install.sh          # Linux/macOS installer
 │   └── install.ps1         # Windows installer
@@ -173,6 +184,15 @@ antigravity-telegram-suite/
 1. Copy `locales/en.json` to `locales/xx.json`
 2. Translate all string values
 3. Set `LANGUAGE=xx` in your `.env`
+
+## ⚠️ Known Issues
+
+| Issue | Details |
+|-------|---------|
+| **Standalone App Limitations** | Some features (workspace switching, thread management) may not work reliably with the Standalone Antigravity App. **Antigravity IDE is fully supported and recommended.** |
+| **Auto-Update on IDE 2.0** | If Antigravity IDE auto-updates, DOM selectors may break until the bot is also updated. |
+
+> 💡 As a developer, I prefer to focus on IDE support. The Standalone App integration is provided on a best-effort basis.
 
 ## 🤝 Contributing
 

@@ -11,6 +11,7 @@ const { execSync, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const { t } = require('./i18n');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const PACKAGE_JSON = path.join(PROJECT_ROOT, 'package.json');
@@ -132,7 +133,7 @@ function performUpdate() {
 
             const nextStep = () => {
                 // Resolve immediately so the bot can send the confirmation message
-                resolve({ updated: true, message: `✅ Kodlar güncellendi ve bağımlılıklar kuruldu.\nBot şimdi yeniden başlatılıyor...` });
+                resolve({ updated: true, message: t('update.success') });
                 
                 // Delay restart by 3 seconds to let Telegram API deliver the message
                 setTimeout(() => {

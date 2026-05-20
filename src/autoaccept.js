@@ -61,9 +61,10 @@ const { resolveTargets } = require('./cdp_controller');
 // ─── Build DOM Observer Script ────────────────────────────────────────
 function buildObserverScript() {
     const buttonTexts = [
+        'yes, allow this time', 'yes, and always allow', 'yes, always allow', 'allow running this command',
         'run', 'accept all', 'accept changes', 'accept', 'always allow', 'allow this conversation',
-        'allow', 'retry', 'continue',
-        'çalıştır', 'tümünü kabul et', 'değişiklikleri kabul et', 'kabul et', 'her zaman izin ver', 'izin ver', 'yeniden dene', 'devam et'
+        'allow', 'retry', 'continue', 'submit',
+        'çalıştır', 'tümünü kabul et', 'değişiklikleri kabul et', 'kabul et', 'her zaman izin ver', 'izin ver', 'yeniden dene', 'devam et', 'gönder'
     ];
 
     return `
@@ -72,12 +73,7 @@ function buildObserverScript() {
     window.__AA_BOT_OBSERVER_ACTIVE = true;
 
     function isAgentPanel() {
-        return !!(document.querySelector('#conversation, #chat, .interactive-session, .react-app-container') ||
-            document.querySelector('[class*="agent"]') ||
-            document.querySelector('[data-vscode-context]') ||
-            document.querySelector('.monaco-workbench') ||
-            document.querySelector('script[src*="agent" i]') ||
-            window.location.href.includes('agent'));
+        return true; // Auto-accept is globally scoped to targeted webview contexts
     }
 
     var AMBIGUOUS_TEXTS = { 'run': true, 'accept': true, 'allow': true, 'retry': true, 'continue': true, 'çalıştır': true, 'kabul et': true, 'izin ver': true, 'yeniden dene': true, 'devam et': true };
@@ -274,12 +270,29 @@ function buildObserverScript() {
             } else { window.__AA_BOT_RECOVERY_TS = []; }
 
             var key = _domPath(btn) + ':' + (btn.textContent || '').trim().toLowerCase().substring(0, 30);
-            clickCooldowns[key] = Date.now();
+            
+            // Bypass cooldown for submit so it can be clicked reliably
+            if (matchedText !== 'submit' && matchedText !== 'gönder') {
+                clickCooldowns[key] = Date.now();
+            }
 
             btn.click();
             window.__AA_BOT_CLICK_COUNT = (window.__AA_BOT_CLICK_COUNT || 0) + 1;
             window.__AA_BOT_CLICK_LOG.push({ text: matchedText, tag: (btn.tagName || '').toLowerCase(), time: Date.now() });
             if (window.__AA_BOT_CLICK_LOG.length > 20) window.__AA_BOT_CLICK_LOG.shift();
+            
+            // If we didn't just click submit, try to find and click submit immediately
+            if (matchedText !== 'submit' && matchedText !== 'gönder') {
+                setTimeout(function() {
+                    var submitMatch = findButton(document.body, ['submit', 'gönder']);
+                    if (submitMatch) {
+                        submitMatch.node.click();
+                        window.__AA_BOT_CLICK_COUNT = (window.__AA_BOT_CLICK_COUNT || 0) + 1;
+                        window.__AA_BOT_CLICK_LOG.push({ text: submitMatch.matchedText + ' (chained)', tag: (submitMatch.node.tagName || '').toLowerCase(), time: Date.now() });
+                    }
+                }, 200);
+            }
+            
             return 'clicked:' + matchedText;
         }
         return null;

@@ -6,7 +6,7 @@ const os = require('os');
 const { exec } = require('child_process');
 const { loadLocale, t, getLang } = require('./i18n');
 const { config, isIDERunning, killIDE, cleanLockFile, launchIDE, trustWorkspaceViaCDP, PLATFORM } = require('./platform');
-const { isAgentWorking, getFullLatestResponse, snapshotChatState, captureAgentScreenshot, captureFullIDEScreenshot, waitForAgentResponse, sendViaCDP, triggerNewChat, triggerModelMenu, getAvailableModels, selectModel, getCurrentModel, stopAgent, getQuota, listWindows, setPreferredWindow, getPreferredWindow, getPreferredTargetId, getCachedWindows, closeWindow, listAgentThreads, switchAgentThread, getActiveThreadId, getActiveThreadInfo, setActiveWorkspace } = require('./cdp_controller');
+const { isAgentWorking, getFullLatestResponse, snapshotChatState, captureAgentScreenshot, captureFullIDEScreenshot, waitForAgentResponse, sendViaCDP, triggerNewChat, triggerModelMenu, getAvailableModels, selectModel, getCurrentModel, stopAgent, getQuota, listWindows, setPreferredWindow, getPreferredWindow, getPreferredTargetId, getCachedWindows, closeWindow, listAgentThreads, switchAgentThread, getActiveThreadId, getActiveThreadInfo, setActiveWorkspace, switchStandaloneWorkspace } = require('./cdp_controller');
 const autoaccept = require('./autoaccept');
 const updater = require('./updater');
 const { runTurboOrchestration } = require('./turbo_orchestrator');
@@ -94,7 +94,53 @@ if (!ALLOWED_CHAT_ID) {
 }
 
 const bot = new Telegraf(process.env.BOT_TOKEN, { handlerTimeout: 900000 }); // 15 minutes timeout to allow long /ask requests
-const CDP_PORT = process.env.DEBUGGING_PORT || 9333;
+function getCDPPort(app = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') {
+    if (app === 'ide') {
+        return parseInt(process.env.IDE_CDP_PORT || '9334', 10);
+    }
+    return parseInt(process.env.AGENT_CDP_PORT || process.env.DEBUGGING_PORT || '9333', 10);
+}
+let CDP_PORT = getCDPPort();
+
+function updateEnvFile(key, value) {
+    const envPath = path.join(__dirname, '..', '.env');
+    let content = '';
+    try {
+        if (fs.existsSync(envPath)) {
+            content = fs.readFileSync(envPath, 'utf8');
+        } else {
+            const examplePath = path.join(__dirname, '..', '.env.example');
+            if (fs.existsSync(examplePath)) {
+                content = fs.readFileSync(examplePath, 'utf8');
+            }
+        }
+    } catch (e) {
+        console.error('Failed to read .env file:', e.message);
+    }
+
+    const lines = content.split(/\r?\n/);
+    let keyUpdated = false;
+    const newLines = lines.map(line => {
+        if (line.trim().startsWith(`${key}=`)) {
+            keyUpdated = true;
+            return `${key}=${value}`;
+        }
+        return line;
+    });
+
+    if (!keyUpdated) {
+        newLines.push(`${key}=${value}`);
+    }
+
+    try {
+        fs.writeFileSync(envPath, newLines.join('\n'), 'utf8');
+        process.env[key] = value;
+        return true;
+    } catch (e) {
+        console.error('Failed to write .env file:', e.message);
+        return false;
+    }
+}
 
 function markdownToTelegramHtml(text) {
     let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -254,8 +300,24 @@ bot.start((ctx) => {
     ctx.reply(t('bot.started', { chatId: ctx.chat.id }));
 });
 
+async function cleanupAll() {
+    console.log('[cleanup] Closing all Antigravity instances before exit...');
+    try {
+        await killIDE('agent');
+    } catch (e) {
+        console.error('[cleanup] Failed to kill agent:', e.message);
+    }
+    try {
+        await killIDE('ide');
+    } catch (e) {
+        console.error('[cleanup] Failed to kill ide:', e.message);
+    }
+    console.log('[cleanup] All Antigravity instances killed.');
+}
+
 bot.command('restart', async (ctx) => {
-    await ctx.reply('🔄 Bot yeniden başlatılıyor...');
+    await ctx.reply(t('restart.closing'));
+    await cleanupAll();
     process.exit(0);
 });
 
@@ -279,17 +341,21 @@ ${t('help.chat_text')}
 });
 
 bot.command('start_ide', async (ctx) => {
-    const running = await isIDERunning();
+    const app = 'ide';
+    const running = await isIDERunning(app);
     if (running) {
-        return ctx.reply(t('ide.already_running'));
+        return ctx.reply(t('ide.already_running_short'));
     }
-    cleanLockFile();
+    cleanLockFile(app);
     ctx.reply(t('ide.starting'));
     try {
-        await launchIDE(null, CDP_PORT);
+        const appPort = getCDPPort(app);
+        await launchIDE(null, appPort, app);
         ctx.reply(t('ide.started'));
         setTimeout(() => {
-            if (autoaccept.isEnabled) autoaccept.enable(CDP_PORT).catch(()=>{});
+            if (autoaccept.isEnabled) autoaccept.enable(appPort).catch(()=>{});
+            const defaultModel = process.env.DEFAULT_MODEL || 'Gemini 3.1 Pro (High)';
+            selectModel(appPort, defaultModel).catch(()=>{});
         }, 3000);
     } catch (err) {
         if (err.message === 'IDE_NOT_INSTALLED') {
@@ -300,15 +366,58 @@ bot.command('start_ide', async (ctx) => {
     }
 });
 
-bot.command('close', async (ctx) => {
-    const running = await isIDERunning();
+bot.command('start_ag', async (ctx) => {
+    const app = 'agent';
+    const running = await isIDERunning(app);
+    if (running) {
+        return ctx.reply(t('standalone.already_running'));
+    }
+    cleanLockFile(app);
+    ctx.reply(t('standalone.starting'));
+    try {
+        const appPort = getCDPPort(app);
+        await launchIDE(null, appPort, app);
+        ctx.reply(t('standalone.started'));
+        setTimeout(() => {
+            if (autoaccept.isEnabled) autoaccept.enable(appPort).catch(()=>{});
+            const defaultModel = process.env.DEFAULT_MODEL || 'Gemini 3.1 Pro (High)';
+            selectModel(appPort, defaultModel).catch(()=>{});
+        }, 3000);
+    } catch (err) {
+        if (err.message === 'IDE_NOT_INSTALLED') {
+            ctx.reply(t('standalone.not_installed'));
+        } else {
+            ctx.reply(`❌ Başlatma hatası: ${err.message}`);
+        }
+    }
+});
+
+bot.command('close_ide', async (ctx) => {
+    const app = 'ide';
+    const running = await isIDERunning(app);
     if (!running) {
-        cleanLockFile();
+        cleanLockFile(app);
         return ctx.reply(t('ide.already_closed'));
     }
     ctx.reply(t('ide.closing'));
-    await killIDE();
+    await killIDE(app);
     ctx.reply(t('ide.closed'));
+});
+
+bot.command('close_ag', async (ctx) => {
+    const app = 'agent';
+    const running = await isIDERunning(app);
+    if (!running) {
+        cleanLockFile(app);
+        return ctx.reply(t('standalone.already_closed'));
+    }
+    ctx.reply(t('standalone.closing'));
+    await killIDE(app);
+    ctx.reply(t('standalone.closed'));
+});
+
+bot.command('close', async (ctx) => {
+    ctx.reply(t('close.select_prompt'));
 });
 
 bot.command('close_window', async (ctx) => {
@@ -322,36 +431,42 @@ bot.command('close_window', async (ctx) => {
 });
 
 const handleStatus = async (ctx) => {
-    let msg = t('status.title') + '\n';
+    let msg = '📊 <b>Antigravity Bot Durum Raporu</b>\n\n';
     
-    const ideCheck = await isIDERunning();
-    msg += ideCheck ? t('status.ide_running') + '\n' : t('status.ide_stopped') + '\n';
+    const agentCheck = await isIDERunning('agent');
+    const ideCheck = await isIDERunning('ide');
+    
+    msg += `🤖 <b>Antigravity Standalone:</b> ${agentCheck ? '🟢 ÇALIŞIYOR' : '🔴 KAPALI'}\n`;
+    msg += `💻 <b>Antigravity IDE (Classic):</b> ${ideCheck ? '🟢 ÇALIŞIYOR' : '🔴 KAPALI'}\n`;
+    
+    const activeApp = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent';
+    msg += `🎯 <b>Tercih Edilen Uygulama:</b> <code>${activeApp === 'agent' ? 'Standalone' : 'Classic IDE'}</code>\n\n`;
     
     try {
         await getActiveThreadId(CDP_PORT);
-        msg += t('status.cdp_active') + '\n';
+        msg += '⚡ <b>CDP Otomasyonu:</b> 🟢 AKTİF\n';
     } catch {
-        msg += t('status.cdp_inactive') + '\n';
+        msg += '⚡ <b>CDP Otomasyonu:</b> 🔴 PASİF (CDP bağlantısı kurulamadı)\n';
     }
     
-    msg += t('status.bot_running') + '\n';
+    msg += '🤖 <b>Telegram Bot:</b> 🟢 AKTİF\n';
     
     try {
         const activeInfo = await getActiveThreadInfo(CDP_PORT);
         if (activeInfo) {
-            msg += `\n💬 <b>Chat:</b>\n`;
-            msg += `- Workspace: ${activeInfo.workspace}\n`;
-            msg += `- Thread: ${activeInfo.name}\n`;
+            msg += `\n💬 <b>Aktif Sohbet Detayları:</b>\n`;
+            msg += `- Proje Alanı: <code>${activeInfo.workspace}</code>\n`;
+            msg += `- Ajan Başlığı: <code>${activeInfo.name}</code>\n`;
             const currentModel = await getCurrentModel(CDP_PORT);
-            if (currentModel) msg += `- Model: ${currentModel}\n`;
+            if (currentModel) msg += `- Seçili Model: <code>${currentModel}</code>\n`;
             const isWorking = await isAgentWorking(CDP_PORT);
-            msg += `- Status: ${isWorking ? 'Working...' : 'Idle'}\n`;
+            msg += `- Ajan Durumu: <b>${isWorking ? '🔄 Çalışıyor (Meşgul)' : '💤 Beklemede (Idle)'}</b>\n`;
         }
     } catch (e) {
         // silently fail if we can't get chat info
     }
 
-    msg += '\n<b>Auto-Accept:</b> ' + (autoaccept.isEnabled ? '✅ ON' : '❌ OFF') + '\n';
+    msg += '\n🛡️ <b>Auto-Accept:</b> ' + (autoaccept.isEnabled ? t('status.autoaccept_on') : t('status.autoaccept_off')) + '\n';
 
     ctx.reply(msg, { parse_mode: 'HTML' });
 };
@@ -382,8 +497,10 @@ async function getChatHeader(targetId = null, fallback = '') {
 
 async function buildMainMenu() {
     let wsName = 'Projects';
+    let threadName = null;
     try {
         const info = await getActiveThreadInfo(CDP_PORT);
+        if (info && info.name) threadName = info.name;
         if (info && info.workspace) {
             wsName = info.workspace.split('/').pop() || info.workspace;
         } else if (typeof currentWorkspaceDir !== 'undefined' && currentWorkspaceDir && currentWorkspaceDir !== config.projectsDir) {
@@ -398,11 +515,25 @@ async function buildMainMenu() {
     let modelName = t('menu.model_not_selected') || 'Model Seçilmedi';
     try {
         const m = await getCurrentModel(CDP_PORT);
-        if (m) modelName = m;
+        if (m) {
+            // Kısalt: parantez içindekileri sil (örn. "Claude Opus 4.6 (Thinking)" -> "Claude Opus 4.6")
+            modelName = m.replace(/\s*\([^)]*\)/g, '').trim();
+        }
     } catch(e) {}
 
+    // Butonda her zaman aktif ajan/konuşma başlığını göster (workspace değil)
+    // Standalone'da workspace kavramı yok, IDE'de de ajan ismi daha kullanışlı
+    let displayTitle = 'Agent';
+    if (threadName && threadName !== 'Launchpad') {
+        displayTitle = threadName;
+    } else if (wsName && wsName !== 'Projects') {
+        displayTitle = wsName;
+    }
+    // Başlığı max 20 karaktere kısalt
+    if (displayTitle.length > 20) displayTitle = displayTitle.substring(0, 18) + '...';
+
     return Markup.keyboard([
-        [`📂 ${wsName}`, `🤖 ${modelName}`],
+        [`🤖 ${displayTitle}`, `🧠 ${modelName}`],
         [
             t('menu.btn_screenshot') || '📸 Ekran', 
             t('menu.btn_artifacts') || "📦 Artifact'ler", 
@@ -502,10 +633,10 @@ bot.command('ask', (ctx) => {
 bot.command('cmd', async (ctx) => {
     const cmdStr = ctx.message.text.split(' ').slice(1).join(' ');
     if (!cmdStr) {
-        return ctx.reply('Lütfen çalıştırılacak komutu girin. Örnek: /cmd ls -la');
+        return ctx.reply(t('cmd.empty'));
     }
     
-    ctx.reply(`⏳ Komut çalıştırılıyor:\n\`${cmdStr}\``, { parse_mode: 'MarkdownV2' });
+    ctx.reply(t('cmd.running', { cmdStr }), { parse_mode: 'MarkdownV2' });
     
     exec(cmdStr, { timeout: 60000, maxBuffer: 1024 * 1024 * 5 }, async (error, stdout, stderr) => {
         let output = "";
@@ -513,9 +644,9 @@ bot.command('cmd', async (ctx) => {
         if (stderr) output += `[STDERR]\n${stderr}\n`;
         if (error) output += `[ERROR]\n${error.message}\n`;
         
-        if (!output) output = "✅ Komut başarıyla çalıştı (Çıktı yok).";
+        if (!output) output = t('cmd.no_output');
         
-        await sendLongMessage(ctx, output, `💻 Komut Çıktısı:`);
+        await sendLongMessage(ctx, output, t('cmd.output_title'));
     });
 });
 
@@ -538,8 +669,15 @@ bot.command('new', async (ctx) => {
     try {
         const success = await triggerNewChat(CDP_PORT);
         console.log('[/new] triggerNewChat result:', success);
-        if (success) ctx.reply(t('new_chat.opened'));
-        else ctx.reply(t('new_chat.not_found'));
+        if (success) {
+            ctx.reply(t('new_chat.opened'));
+            setTimeout(() => {
+                const defaultModel = process.env.DEFAULT_MODEL || 'Gemini 3.1 Pro (High)';
+                selectModel(CDP_PORT, defaultModel).catch(()=>{});
+            }, 1500);
+        } else {
+            ctx.reply(t('new_chat.not_found'));
+        }
     } catch(e) {
         console.log('[/new] Error:', e.message);
         ctx.reply(t('new_chat.error', { error: e.message }));
@@ -553,10 +691,13 @@ bot.command('agents', async (ctx) => {
     if (!isNaN(num)) {
         if (num > 0 && num <= cachedAgentThreads.length) {
             const thread = cachedAgentThreads[num - 1];
-            ctx.reply(t('agents.switched', { name: thread.name }) || `✅ Switched to thread: ${thread.name}`, { parse_mode: 'HTML' });
             const success = await switchAgentThread(CDP_PORT, thread.name);
             if (!success) {
                 ctx.reply(t('agents.not_found') || '❌ Thread could not be selected.');
+            } else {
+                setPreferredWindow(null);
+                if (thread.workspace) setActiveWorkspace(thread.workspace);
+                await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`);
             }
         } else {
             ctx.reply(t('agents.invalid_number') || '❌ Invalid thread number.');
@@ -606,7 +747,6 @@ bot.hears(/^\/agents_(\d+)$/, async (ctx) => {
     const num = parseInt(ctx.match[1], 10);
     if (num > 0 && num <= cachedAgentThreads.length) {
         const thread = cachedAgentThreads[num - 1];
-        ctx.reply(t('agents.switched', { name: thread.name }) || `✅ Switched to thread: ${thread.name}`, { parse_mode: 'HTML' });
         const targetId = await switchAgentThread(CDP_PORT, thread.name);
         if (!targetId) {
             ctx.reply(t('agents.not_found') || '❌ Thread could not be selected.');
@@ -616,6 +756,8 @@ bot.hears(/^\/agents_(\d+)$/, async (ctx) => {
             if (thread.workspace) {
                 setActiveWorkspace(thread.workspace);
             }
+            // Menüyü yenile — buton yeni ajan ismini göstersin
+            await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`);
         }
     } else {
         ctx.reply(t('agents.invalid_number') || '❌ Invalid thread number.');
@@ -758,7 +900,7 @@ const handleModel = async (ctx) => {
         if (parts[0].startsWith('/')) parts.shift();
         modelName = parts.join(' ').trim();
         // Clear if it's from the button text
-        if (modelName.startsWith('🤖') || modelName.toLowerCase().startsWith('model:')) modelName = '';
+        if (modelName.startsWith('🧠') || modelName.startsWith('🤖') || modelName.toLowerCase().startsWith('model:')) modelName = '';
     }
     
     if (modelName) {
@@ -772,11 +914,10 @@ const handleModel = async (ctx) => {
         }
         return;
     }
-    
     const models = [
         'Gemini 3.1 Pro (High)',
+        'Gemini 3.5 Flash (High)',
         'Gemini 3.1 Pro (Low)',
-        'Gemini 3 Flash',
         'Claude Sonnet 4.6 (Thinking)',
         'Claude Opus 4.6 (Thinking)',
         'GPT-OSS 120B (Medium)'
@@ -934,6 +1075,50 @@ bot.action('aa_status', async (ctx) => {
 function doLaunchWorkspace(ctx, workspace) {
     ctx.reply(t('workspace.switching', { workspace }));
     (async () => {
+        const activeApp = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent';
+        const wsName = path.basename(workspace);
+        
+        // Standalone Agent 2.0 Hızlı Geçiş:
+        // Eğer 'agent' aktifse ve çalışıyorsa, sol menüdeki proje kartına tıklayarak 1 saniyede geçiş yapar!
+        if (activeApp === 'agent') {
+            const running = await isIDERunning('agent');
+            if (running) {
+                try {
+                    const success = await switchStandaloneWorkspace(CDP_PORT, wsName);
+                    if (success) {
+                        setActiveWorkspace(wsName);
+                        setPreferredWindow(null);
+                        if (autoaccept.isEnabled) {
+                            autoaccept.enable(CDP_PORT).catch(() => {});
+                        }
+                        await sendMainMenu(ctx, t('workspace.started') || '📁 Çalışma alanı başarıyla değiştirildi!');
+                        return;
+                    }
+                } catch (e) {
+                    console.debug('[doLaunchWorkspace] Standalone quick switch failed:', e.message);
+                }
+            } else {
+                try {
+                    await launchIDE(null, CDP_PORT, 'agent');
+                    await new Promise(r => setTimeout(r, 4000));
+                    const success = await switchStandaloneWorkspace(CDP_PORT, wsName);
+                    if (success) {
+                        setActiveWorkspace(wsName);
+                        setPreferredWindow(null);
+                        if (autoaccept.isEnabled) {
+                            autoaccept.enable(CDP_PORT).catch(() => {});
+                        }
+                        await sendMainMenu(ctx, t('workspace.started') || '📁 Çalışma alanı başarıyla değiştirildi!');
+                        return;
+                    }
+                } catch (e) {
+                    console.debug('[doLaunchWorkspace] Standalone launch and switch failed:', e.message);
+                }
+            }
+            await sendMainMenu(ctx, t('workspace.not_found_standalone', { wsName }));
+            return;
+        }
+        
         // Multi-window support: DO NOT kill existing IDE instances!
         // We just launch the new workspace.
         
@@ -994,13 +1179,30 @@ function doLaunchWorkspace(ctx, workspace) {
 const handleWorkspace = (ctx) => {
     let workspace = '';
     if (ctx.message && ctx.message.text) {
-        const parts = ctx.message.text.split(' ');
+        let text = ctx.message.text.trim();
+        if (text.startsWith('🤖')) {
+            text = text.substring(2).trim();
+        }
+        const parts = text.split(' ');
         if (parts[0].startsWith('/')) parts.shift();
         workspace = parts.join(' ').trim();
-        if (workspace.startsWith('📂') || workspace.toLowerCase().startsWith('workspace:')) workspace = '';
+        if (workspace.toLowerCase().startsWith('workspace:')) {
+            workspace = workspace.substring(10).trim();
+        }
     }
     
-    if (!workspace) {
+    let isValid = false;
+    let wsPath = '';
+    if (workspace) {
+        wsPath = workspace.startsWith('/') || workspace.includes(':') ? workspace : path.join(config.projectsDir, workspace);
+        try {
+            isValid = fs.statSync(wsPath).isDirectory();
+        } catch (e) {
+            isValid = false;
+        }
+    }
+    
+    if (!workspace || !isValid) {
         const projectsDir = config.projectsDir;
         fs.readdir(projectsDir, { withFileTypes: true }, (err, files) => {
             if (err) return ctx.reply(t('workspace.read_error'));
@@ -1013,8 +1215,7 @@ const handleWorkspace = (ctx) => {
         });
         return;
     }
-    // If user typed a folder name (not full path), resolve it to full path
-    const wsPath = workspace.startsWith('/') ? workspace : path.join(config.projectsDir, workspace);
+    
     currentWorkspaceDir = wsPath;
     doLaunchWorkspace(ctx, wsPath);
 };
@@ -1073,6 +1274,140 @@ bot.action(/lang_(.+)/, async (ctx) => {
     await setMenuOnAllScopes();
     ctx.answerCbQuery(t('lang.changed', { lang: newLang }));
     await sendMainMenu(ctx, t('lang.changed', { lang: newLang }));
+});
+
+
+// ===== DUAL APP SWITCHER =====
+
+bot.command('app', async (ctx) => {
+    const currentApp = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent';
+    const appName = currentApp === 'ide' ? '💻 Classic Monaco IDE' : '🤖 Standalone Agent (2.0)';
+    const currentPort = CDP_PORT;
+    
+    let msg = `🤖 <b>Antigravity Uygulama Seçimi</b>\n\n`;
+    msg += `Tercih Edilen Uygulama: <b>${appName}</b>\n`;
+    msg += `Aktif CDP Bağlantı Portu: <code>${currentPort}</code>\n\n`;
+    msg += t('app.select_prompt');
+    msg += `• <b>Standalone Agent:</b> CDP Port 9333\n`;
+    msg += `• <b>Monaco IDE:</b> CDP Port 9334\n\n`;
+    msg += `⚡ <i>Seçiminiz kalıcı olarak .env dosyasına kaydedilir ve botu yeniden başlatmadan anında uygulanır.</i>`;
+
+    const buttons = [
+        [{ text: '🤖 Standalone Agent (Port: 9333)', callback_data: 'pref_app_agent' }],
+        [{ text: '💻 Classic Monaco IDE (Port: 9334)', callback_data: 'pref_app_ide' }]
+    ];
+
+    ctx.reply(msg, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buttons }
+    });
+});
+
+bot.action(/pref_app_(.+)/, async (ctx) => {
+    const selectedApp = ctx.match[1]; // 'agent' or 'ide'
+    const success = updateEnvFile('ANTIGRAVITY_PREFERRED_APP', selectedApp);
+    
+    if (success) {
+        // Recalculate port
+        CDP_PORT = getCDPPort();
+        ctx.answerCbQuery(`Uygulama tercihi '${selectedApp}' olarak güncellendi!`);
+        
+        const appName = selectedApp === 'ide' ? '💻 Classic Monaco IDE' : '🤖 Standalone Agent (2.0)';
+        let msg = `✅ <b>Uygulama Tercihi Güncellendi!</b>\n\n`;
+        msg += `Tercih Edilen: <b>${appName}</b>\n`;
+        msg += `Yeni Bağlantı Portu: <code>${CDP_PORT}</code>\n\n`;
+        msg += `Bot şimdi tüm mesaj ve komutlarınızı bu uygulamaya yönlendirecektir.`;
+        
+        ctx.reply(msg, { parse_mode: 'HTML' });
+        
+        // Seçilen uygulama açık değilse otomatik başlat
+        try {
+            const running = await isIDERunning(selectedApp);
+            if (!running) {
+                ctx.reply(t('app.auto_starting', { appName }));
+                await launchIDE(null, CDP_PORT, selectedApp);
+                // Uygulamanın açılması için biraz bekle
+                await new Promise(r => setTimeout(r, 4000));
+                ctx.reply(t('app.started', { appName }));
+            }
+        } catch (err) {
+            console.error('[App Switch] Auto-start failed:', err.message);
+        }
+        
+        // Autoaccept status reload for new port
+        if (autoaccept.isEnabled) {
+            autoaccept.enable(CDP_PORT).catch(() => {});
+        }
+        
+        await sendMainMenu(ctx, `🕹️ Kontrol Paneli (${selectedApp === 'ide' ? 'IDE' : 'Agent'}):`);
+    } else {
+        ctx.answerCbQuery('Hata: Tercih kaydedilemedi.');
+    }
+});
+
+// ===== SHORTCUTS FIXER =====
+
+bot.command('fix_shortcuts', async (ctx) => {
+    ctx.reply(t('shortcuts.scanning'));
+    
+    // Create a safe, temporary PowerShell script on disk and run it
+    const psScriptPath = path.join(os.tmpdir(), 'fix_shortcuts.ps1');
+    const psScript = `
+$sh = New-Object -ComObject WScript.Shell
+$desktop = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop")
+
+# 1. Standalone Agent (Port 9333)
+$lnkAgent = Join-Path $desktop "Antigravity.lnk"
+if (Test-Path $lnkAgent) {
+    $lnk = $sh.CreateShortcut($lnkAgent)
+    $lnk.Arguments = "--remote-debugging-port=9333"
+    $lnk.Save()
+    Write-Output "agent-fixed"
+}
+
+# 2. Classic IDE (Port 9334)
+$lnkIDE = Join-Path $desktop "Antigravity IDE.lnk"
+if (Test-Path $lnkIDE) {
+    $lnk = $sh.CreateShortcut($lnkIDE)
+    $lnk.Arguments = "--remote-debugging-port=9334"
+    $lnk.Save()
+    Write-Output "ide-fixed"
+}
+`;
+
+    try {
+        fs.writeFileSync(psScriptPath, psScript, 'utf8');
+        exec(`powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`, (err, stdout, stderr) => {
+            // Clean up temporary script
+            try { fs.unlinkSync(psScriptPath); } catch (_) {}
+            
+            if (err) {
+                console.error('[fix_shortcuts] Error:', err);
+                return ctx.reply(t('shortcuts.error', { error: err.message }), { parse_mode: 'HTML' });
+            }
+            
+            let status = 'Kısayollar güncellendi:\n';
+            const output = stdout.toLowerCase();
+            let fixedCount = 0;
+            if (output.includes('agent-fixed')) {
+                status += '• 🤖 <b>Antigravity.lnk</b> -> <code>--remote-debugging-port=9333</code> olarak güncellendi!\n';
+                fixedCount++;
+            } else {
+                status += '• 🤖 <i>Antigravity.lnk</i> (' + t('shortcuts.not_found') + ')\n';
+            }
+            if (output.includes('ide-fixed')) {
+                status += '• 💻 <b>Antigravity IDE.lnk</b> -> <code>--remote-debugging-port=9334</code> olarak güncellendi!\n';
+                fixedCount++;
+            } else {
+                status += '• 💻 <i>Antigravity IDE.lnk</i> (' + t('shortcuts.not_found') + ')\n';
+            }
+            
+            status += t('shortcuts.success', { count: fixedCount });
+            ctx.reply(status, { parse_mode: 'HTML' });
+        });
+    } catch (e) {
+        ctx.reply(t('shortcuts.start_error', { error: e.message }));
+    }
 });
 
 
@@ -1162,7 +1497,7 @@ bot.action(/focus_(.+)/, async (ctx) => {
     const windows = await listWindows(CDP_PORT);
     const selected = windows.find(w => w.id.startsWith(idPrefix));
     if (!selected) {
-        return ctx.answerCbQuery('Ajan penceresi bulunamadı veya kapatılmış.');
+        return ctx.answerCbQuery(t('agents.window_not_found'));
     }
     setPreferredWindow(selected.id);
     const shortTitle = selected.title.substring(0, 30);
@@ -1330,8 +1665,10 @@ function getMenuCommands() {
         { command: 'latest', description: t('menu.latest_desc') },
         { command: 'screenshot', description: t('menu.screenshot_desc') },
         { command: 'status', description: t('menu.status_desc') },
-        { command: 'start_ide', description: t('menu.start_ide_desc') },
-        { command: 'close', description: t('menu.close_desc') },
+        { command: 'start_ide', description: t('menu.start_ide_desc') || 'Start IDE' },
+        { command: 'start_ag', description: t('menu.start_ag_desc') || 'Start Agent' },
+        { command: 'close_ide', description: t('menu.close_ide_desc') || 'Close IDE' },
+        { command: 'close_ag', description: t('menu.close_ag_desc') || 'Close Agent' },
         { command: 'new', description: t('menu.new_desc') },
         { command: 'agents', description: t('menu.agents_desc') },
         { command: 'artifacts', description: t('menu.artifacts_desc') },
@@ -1348,6 +1685,8 @@ function getMenuCommands() {
         { command: 'update', description: t('menu.update_desc') || 'Check for updates' },
         { command: 'version', description: t('menu.version_desc') || 'Show current version' },
         { command: 'menu', description: t('menu.menu_desc') },
+        { command: 'app', description: t('menu.app_desc') || 'Select active application' },
+        { command: 'fix_shortcuts', description: t('menu.fix_shortcuts_desc') || 'Fix desktop shortcuts' },
         { command: 'restart', description: t('menu.restart_desc') || 'Restart the bot' }
     ];
     return cmds.sort((a, b) => a.command.localeCompare(b.command));
@@ -1456,7 +1795,7 @@ bot.command('version', async (ctx) => {
 });
 
 bot.command('update', async (ctx) => {
-    ctx.reply('🔍 Güncellemeler kontrol ediliyor...');
+    ctx.reply(t('update.checking'));
     try {
         const result = await updater.checkForUpdates();
         if (!result.available) {
@@ -1476,7 +1815,7 @@ bot.command('update', async (ctx) => {
         const updateResult = await updater.performUpdate();
         await ctx.reply(`ℹ️ ${updateResult.message}`);
     } catch(e) {
-        ctx.reply(`❌ Güncelleme hatası: ${e.message}`);
+        ctx.reply(t('update.error', { error: e.message }));
     }
 });
 
@@ -1517,16 +1856,56 @@ bot.command('panel', async (ctx) => {
     await sendMainMenu(ctx);
 });
 
-bot.hears(/^📂/i, handleWorkspace);
-bot.hears(/^🤖/i, handleModel);
+bot.hears(/^🤖/i, async (ctx) => {
+    // 🤖 butonu aktif ajanı gösteriyor — tıklanınca /agents listesini tetikle
+    try {
+        const workspaces = await listAgentThreads(CDP_PORT);
+        if (workspaces.length === 0) {
+            return ctx.reply(t('agents.no_recent') || 'ℹ️ No recent active threads found.');
+        }
+        
+        cachedAgentThreads = [];
+        let msg = t('agents.list_title') || '📂 <b>Recent Chat Threads:</b>\n\n';
+        let index = 1;
+        
+        for (const ws of workspaces) {
+            const recentThreads = ws.threads.filter(th => {
+                if (/^show\s+\d+\s+more/i.test(th.name)) return false;
+                return true;
+            });
+            
+            if (recentThreads.length > 0) {
+                msg += `<b>📁 ${ws.workspace}</b>\n`;
+                for (const th of recentThreads) {
+                    cachedAgentThreads.push({ ...th, workspace: ws.workspace });
+                    msg += `  /agents_${index} - ${th.name} <i>(${th.time})</i>\n`;
+                    index++;
+                }
+                msg += '\n';
+            }
+        }
+        
+        if (cachedAgentThreads.length === 0) {
+            return ctx.reply(t('agents.no_recent') || 'ℹ️ No recent active threads found.');
+        }
+        
+        ctx.reply(msg, { parse_mode: 'HTML' });
+    } catch (e) {
+        ctx.reply((t('agents.error') || '❌ Error: ') + e.message);
+    }
+});
+bot.hears(/^🧠/i, handleModel);
 
 bot.on('text', (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
     const query = ctx.message.text;
     
     let explicitTargetId = null;
+    let explicitThreadName = null;
     if (ctx.message.reply_to_message) {
-        explicitTargetId = messageTargetMap.get(ctx.message.reply_to_message.message_id);
+        const val = messageTargetMap.get(ctx.message.reply_to_message.message_id);
+        if (typeof val === 'string') explicitTargetId = val;
+        else if (val) { explicitTargetId = val.targetId; explicitThreadName = val.threadName; }
     }
     if (!explicitTargetId && ctx.message.reply_to_message?.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data?.startsWith('focus_')) {
         explicitTargetId = ctx.message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.replace('focus_', '');
@@ -1534,6 +1913,7 @@ bot.on('text', (ctx) => {
     
     (async () => {
         try {
+            if (explicitThreadName) await switchAgentThread(CDP_PORT, explicitThreadName).catch(()=>{});
             let targetId = explicitTargetId;
             let text = "";
 
@@ -1551,7 +1931,7 @@ bot.on('text', (ctx) => {
                 
                 const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx), targetId);
                 if (isDone) {
-                    text = await getFullLatestResponse(CDP_PORT, targetId);
+                    text = await getFullLatestResponse(CDP_PORT, targetId, explicitThreadName);
                     text = stripQueryFromResponse(text, query);
                 } else {
                     return await ctx.reply(t('ask.timeout'));
@@ -1564,7 +1944,9 @@ bot.on('text', (ctx) => {
             
             const sentIds = await sendLongMessage(ctx, text, header, buttons, ctx.message.message_id);
             if (sentIds && sentIds.length > 0 && targetId) {
-                sentIds.forEach(id => messageTargetMap.set(id, targetId));
+                const activeInfo = await getActiveThreadInfo(CDP_PORT, targetId).catch(() => null);
+                const currentThreadName = activeInfo ? activeInfo.name : null;
+                sentIds.forEach(id => messageTargetMap.set(id, { targetId, threadName: currentThreadName }));
                 saveMessageTargetMap(messageTargetMap);
             }
         } catch(err) {
@@ -1612,14 +1994,18 @@ bot.on(['photo', 'document'], (ctx) => {
             const query = `[System: The user has uploaded an image or file. You MUST use your \`view_file\` tool to examine the file at this absolute path: ${dest} . Do not say you cannot see it. Use the tool!]${caption}`;
             
             let explicitTargetId = null;
+            let explicitThreadName = null;
             if (ctx.message.reply_to_message) {
-                explicitTargetId = messageTargetMap.get(ctx.message.reply_to_message.message_id);
+                const val = messageTargetMap.get(ctx.message.reply_to_message.message_id);
+                if (typeof val === 'string') explicitTargetId = val;
+                else if (val) { explicitTargetId = val.targetId; explicitThreadName = val.threadName; }
             }
             if (!explicitTargetId && ctx.message.reply_to_message?.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data?.startsWith('focus_')) {
                 explicitTargetId = ctx.message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.replace('focus_', '');
             }
             
             await ctx.reply(t('photo.downloaded'));
+            if (explicitThreadName) await switchAgentThread(CDP_PORT, explicitThreadName).catch(()=>{});
             const targetId = await sendViaCDP(query, CDP_PORT, explicitTargetId);
 
             // Wait briefly for message to render in DOM before anchoring state
@@ -1640,7 +2026,9 @@ bot.on(['photo', 'document'], (ctx) => {
                 
                 const sentIds = await sendLongMessage(ctx, text, header, buttons, ctx.message.message_id);
                 if (sentIds && sentIds.length > 0 && targetId) {
-                    sentIds.forEach(id => messageTargetMap.set(id, targetId));
+                    const activeInfo = await getActiveThreadInfo(CDP_PORT, targetId).catch(() => null);
+                    const currentThreadName = activeInfo ? activeInfo.name : null;
+                    sentIds.forEach(id => messageTargetMap.set(id, { targetId, threadName: currentThreadName }));
                     saveMessageTargetMap(messageTargetMap);
                 }
             } else {
@@ -1683,25 +2071,9 @@ async function init() {
         console.error(`[Bot Error] for ${ctx.updateType}:`, err.message || err);
     });
 
-    // Retry bot.launch() with exponential backoff on transient failures (DNS, network)
-    const MAX_LAUNCH_RETRIES = 10;
-    async function launchWithRetry(attempt = 1) {
-        try {
-            await bot.launch({ dropPendingUpdates: true });
-            if (attempt > 1) console.log(`[launch] Polling started successfully on attempt ${attempt}`);
-        } catch (err) {
-            console.error(`[launch] Attempt ${attempt}/${MAX_LAUNCH_RETRIES} failed:`, err.message || err);
-            if (attempt < MAX_LAUNCH_RETRIES) {
-                const delay = Math.min(5000 * Math.pow(2, attempt - 1), 60000); // 5s, 10s, 20s, ... max 60s
-                console.log(`[launch] Retrying in ${delay / 1000}s...`);
-                setTimeout(() => launchWithRetry(attempt + 1), delay);
-            } else {
-                console.error(`[launch] All ${MAX_LAUNCH_RETRIES} attempts exhausted. Exiting for PM2 restart.`);
-                process.exit(1);
-            }
-        }
-    }
-    launchWithRetry();
+    bot.launch({ dropPendingUpdates: true }).catch(err => {
+        console.error("Bot launch failed:", err);
+    });
 
     // Push the main menu keyboard to the user so it's active by default (wait 3s to let IDE/CDP initialize)
     setTimeout(() => {
@@ -1715,5 +2087,17 @@ async function init() {
 init();
 
 // Enable graceful stop
-process.once('SIGINT', () => { try { bot.stop('SIGINT'); } catch(_) {} });
-process.once('SIGTERM', () => { try { bot.stop('SIGTERM'); } catch(_) {} });
+const handleExit = async (signal) => {
+    console.log(`\nReceived ${signal}. Stopping bot polling...`);
+    try {
+        bot.stop(signal);
+    } catch (_) {}
+    // NOTE: We intentionally do NOT call cleanupAll() here.
+    // PM2 restarts should not kill running Antigravity apps.
+    // Use /restart command for explicit app cleanup.
+    process.exit(0);
+};
+
+
+process.once('SIGINT', () => handleExit('SIGINT'));
+process.once('SIGTERM', () => handleExit('SIGTERM'));

@@ -21,6 +21,73 @@ const { UI_LOCATORS_SCRIPT } = require('./ui_locators');
 
 // Cache for the active workspace name, refreshed on each resolveTargets call
 let activeWorkspaceName = null;
+const threadNameToIdCache = new Map();
+
+/**
+ * Resolves a conversation UUID by its thread name.
+ * Checks cache first, then scans file system overview.txt headers.
+ */
+function findConversationIdByTitle(threadName) {
+    if (!threadName) return null;
+    if (threadNameToIdCache.has(threadName)) {
+        return threadNameToIdCache.get(threadName);
+    }
+
+    try {
+        const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
+        const brainPath = path.join(os.homedir(), '.gemini', appDataName, 'brain');
+        if (!fs.existsSync(brainPath)) return null;
+
+        const dirs = fs.readdirSync(brainPath, { withFileTypes: true });
+        
+        // Sort by mtime to search recent threads first
+        const sortedDirs = dirs
+            .filter(d => d.isDirectory())
+            .map(d => {
+                const p = path.join(brainPath, d.name, '.system_generated', 'logs', 'overview.txt');
+                const mtime = fs.existsSync(p) ? fs.statSync(p).mtimeMs : 0;
+                return { name: d.name, path: p, mtime };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+
+        for (const dir of sortedDirs) {
+            if (dir.mtime === 0) continue;
+            
+            // Read first chunk of file (enough to get the first USER_EXPLICIT block)
+            const fd = fs.openSync(dir.path, 'r');
+            const buffer = Buffer.alloc(4096);
+            const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
+            fs.closeSync(fd);
+            
+            const content = buffer.toString('utf8', 0, bytesRead);
+            const lines = content.split('\n');
+            
+            for (const line of lines) {
+                if (line.includes('"source":"USER_EXPLICIT"')) {
+                    try {
+                        const entry = JSON.parse(line);
+                        const match = entry.content.match(/<USER_REQUEST>\\n?([\\s\\S]*?)\\n?<\/USER_REQUEST>/);
+                        if (match) {
+                            let title = match[1].trim();
+                            if (title.length > 50) title = title.substring(0, 50);
+                            
+                            // Loose check since title might be truncated or normalized
+                            if (title.startsWith(threadName.substring(0, 20)) || threadName.startsWith(title.substring(0, 20))) {
+                                threadNameToIdCache.set(threadName, dir.name);
+                                return dir.name;
+                            }
+                        }
+                    } catch (e) {}
+                    break; // Only check the first USER_EXPLICIT
+                }
+            }
+        }
+    } catch (e) {
+        console.debug('[findConversationIdByTitle] Error:', e.message);
+    }
+    
+    return null;
+}
 
 async function resolveTargets(port, includeIframe = true) {
     const raw = await httpGet(`http://127.0.0.1:${port}/json`);
@@ -34,7 +101,7 @@ async function resolveTargets(port, includeIframe = true) {
         !(t.title && t.title.includes('Launchpad')) &&
         t.title !== 'Manager');
 
-
+    const preferredApp = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent';
 
     candidates.sort((a, b) => {
         // Preferred target by ID always wins (set via /window command)
@@ -42,6 +109,19 @@ async function resolveTargets(port, includeIframe = true) {
             if (a.id === preferredTargetId) return -1;
             if (b.id === preferredTargetId) return 1;
         }
+
+        // Prioritize based on preferred app ('agent' vs 'ide')
+        const aIsAgent = a.url && (a.url.includes('/c/') || a.url.includes('tab=') || (a.url.includes('127.0.0.1') && !a.url.includes('vscode-')));
+        const bIsAgent = b.url && (b.url.includes('/c/') || b.url.includes('tab=') || (b.url.includes('127.0.0.1') && !b.url.includes('vscode-')));
+
+        if (preferredApp === 'agent') {
+            if (aIsAgent && !bIsAgent) return -1;
+            if (!aIsAgent && bIsAgent) return 1;
+        } else if (preferredApp === 'ide') {
+            if (!aIsAgent && bIsAgent) return -1;
+            if (aIsAgent && !bIsAgent) return 1;
+        }
+
         // Dynamic fallback: prefer the target matching the active workspace
         if (activeWorkspaceName) {
             const aMatch = a.title.toLowerCase().includes(activeWorkspaceName) ? 1 : 0;
@@ -275,9 +355,10 @@ function httpGet(url, timeoutMs = 5000) {
  */
 async function snapshotChatState(port, specificTargetId = null) {
     try {
-        const activeId = specificTargetId || preferredTargetId || await getActiveThreadId(port);
+        const activeId = await getActiveThreadId(port, specificTargetId || preferredTargetId);
         if (!activeId) return;
-        const logPath = path.join(os.homedir(), '.gemini', 'antigravity', 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
+        const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
+        const logPath = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
         if (!fs.existsSync(logPath)) return;
         
         console.log(`[snapshot] Anchored file-based thread: ${activeId}`);
@@ -346,8 +427,8 @@ async function _domLatestExtraction(port, specificTargetId = null) {
             await Runtime.enable();
             
             const expr = CHAT_EXTRACT_EXPR.replace(
-                "extractedText = msgs.join('\\\\n\\\\n');",
-                "extractedText = msgs.slice(-2).join('\\\\n\\\\n');"
+                "extractedText = msgs.join",
+                "extractedText = msgs.slice(-2).join"
             );
             
             const res = await Runtime.evaluate({
@@ -364,14 +445,15 @@ async function _domLatestExtraction(port, specificTargetId = null) {
     return null;
 }
 
-async function getFullLatestResponse(port, specificTargetId = null) {
+async function getFullLatestResponse(port, specificTargetId = null, threadName = null) {
     const targetIdToUse = specificTargetId || preferredTargetId;
     
     // --- Primary: file-system extraction from the active thread's log ---
     try {
-        const activeId = targetIdToUse || await getActiveThreadId(port);
+        const activeId = findConversationIdByTitle(threadName) || await getActiveThreadId(port, targetIdToUse);
         if (activeId) {
-            const logPath = path.join(os.homedir(), '.gemini', 'antigravity', 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
+            const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
+            const logPath = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
             if (fs.existsSync(logPath)) {
                 // Read the entire file because chunks can break JSON parsing of large messages
                 const content = fs.readFileSync(logPath, 'utf8');
@@ -655,7 +737,7 @@ async function sendViaCDP(text, port, specificTargetId = null) {
 
                             // Find the submit button near the editor (within same panel)
                             const panelContainer = editor.closest('#antigravity') || editor.closest('#conversation') || document;
-                            const submit = panelContainer.querySelector("svg.lucide-arrow-right, svg[class*='arrow-right'], svg[class*='send']")?.closest("button");
+                            const submit = panelContainer.querySelector("svg.lucide-arrow-right, svg.lucide-arrow-up, svg[class*='arrow-right'], svg[class*='arrow-up'], svg[class*='send']")?.closest("button");
                             if (submit && !submit.disabled) {
                                 setTimeout(() => submit.click(), 10);
                                 return { found: true, method: 'button', target: '${target.title?.substring(0, 30) || 'unknown'}' };
@@ -775,6 +857,70 @@ async function listAgentThreads(port) {
             const client = await CDP({ target: target.webSocketDebuggerUrl });
             const { Runtime } = client;
             await Runtime.enable();
+            
+            // First check if Standalone Agent 2.0 UI is active (presence of project cards in DOM)
+            const isStandaloneRes = await Runtime.evaluate({
+                expression: `(() => {
+                    return !!document.querySelector('[data-project-card="true"]');
+                })()`,
+                returnByValue: true
+            });
+            
+            if (isStandaloneRes.result?.value) {
+                const threadsRes = await Runtime.evaluate({
+                    expression: `(() => {
+                        const workspaces = [];
+                        const cards = Array.from(document.querySelectorAll('[data-project-card="true"]'));
+                        
+                        for (const card of cards) {
+                            const parent = card.parentElement;
+                            if (!parent) continue;
+                            
+                            // Extract workspace name and clean trailing numbers
+                            const cloned = card.cloneNode(true);
+                            cloned.querySelectorAll('svg').forEach(el => el.remove());
+                            const wsNameRaw = cloned.textContent.trim();
+                            const wsName = wsNameRaw.replace(/\\s+\\d+$/, '');
+                            
+                            if (!wsName) continue;
+                            
+                            // Find conversation threads in this specific section parent
+                            const convoEls = Array.from(parent.querySelectorAll('div[role="button"]'))
+                                .filter(el => el.className && typeof el.className === 'string' && el.className.includes('ml-[22px]'));
+                                
+                            const threads = [];
+                            for (const el of convoEls) {
+                                const titleEl = el.querySelector('span.truncate, span.text-sm span');
+                                const timeEl = el.querySelector('span.text-xs.opacity-50.ml-4') || el.querySelector('.text-xs');
+                                const name = titleEl ? titleEl.textContent.trim() : el.textContent.trim();
+                                const time = timeEl ? timeEl.textContent.trim() : '';
+                                
+                                if (name && !/^show\\s+\\d+\\s+more/i.test(name)) {
+                                    threads.push({ name, time });
+                                }
+                            }
+                            
+                            if (threads.length > 0) {
+                                let group = workspaces.find(w => w.workspace === wsName);
+                                if (!group) {
+                                    group = { workspace: wsName, threads: [] };
+                                    workspaces.push(group);
+                                }
+                                group.threads.push(...threads);
+                            }
+                        }
+                        return JSON.stringify(workspaces);
+                    })()`,
+                    returnByValue: true
+                });
+                
+                await client.close();
+                const workspaces = JSON.parse(threadsRes.result?.value || '[]');
+                if (workspaces.length > 0) return workspaces;
+                continue;
+            }
+            
+            // Fallback for Classic IDE:
             const clickRes = await Runtime.evaluate({
                 expression: `(() => {
                     const icon = document.querySelector("svg.lucide-history");
@@ -788,13 +934,14 @@ async function listAgentThreads(port) {
             const res = await Runtime.evaluate({
                 expression: `
                     (() => {
-                        const input = document.querySelector('input[placeholder="Select a conversation"]');
+                        const input = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
                         if (!input) return JSON.stringify([]);
                         let container = input;
                         for (let i = 0; i < 15; i++) { if (container.parentElement) container = container.parentElement; }
                         const allDivs = Array.from(container.querySelectorAll('div'));
                         const sectionHeaders = allDivs.filter(d =>
-                            d.className.includes('opacity-50') &&
+                            d.className && typeof d.className === 'string' &&
+                            (d.className.includes('opacity-50') || d.className.includes('text-muted-foreground')) &&
                             d.className.includes('px-2.5') &&
                             d.className.includes('pt-4') &&
                             d.childNodes.length === 1 &&
@@ -813,23 +960,28 @@ async function listAgentThreads(port) {
                             const name = nameEl ? nameEl.textContent.trim() : '';
                             const time = timeEl ? timeEl.textContent.trim() : '';
                             if (!name || /^show\\s+\\d+\\s+more/i.test(name)) continue;
-                            let section = '';
-                            for (const h of sectionHeaders) {
-                                if (row.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING) {
-                                    section = h.textContent.trim();
+                            
+                            let wsName = '';
+                            if (wsEl) {
+                                wsName = wsEl.textContent.trim();
+                            }
+                            if (!wsName) {
+                                let section = '';
+                                for (const h of sectionHeaders) {
+                                    if (row.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING) {
+                                        section = h.textContent.trim();
+                                    }
+                                }
+                                if (section.startsWith('Recent in ')) {
+                                    wsName = section.replace('Recent in ', '');
+                                } else if (section === 'Current') {
+                                    const rh = sectionHeaders.find(h => h.textContent.trim().startsWith('Recent in '));
+                                    wsName = rh ? rh.textContent.trim().replace('Recent in ', '') : 'Current';
+                                } else {
+                                    wsName = 'IDE';
                                 }
                             }
-                            let wsName;
-                            if (section.startsWith('Recent in ')) {
-                                wsName = section.replace('Recent in ', '');
-                            } else if (section === 'Other Conversations' && wsEl) {
-                                wsName = wsEl.textContent.trim();
-                            } else if (section === 'Current') {
-                                const rh = sectionHeaders.find(h => h.textContent.trim().startsWith('Recent in '));
-                                wsName = rh ? rh.textContent.trim().replace('Recent in ', '') : 'Current';
-                            } else {
-                                wsName = 'IDE';
-                            }
+                            
                             let group = workspaces.find(w => w.workspace === wsName);
                             if (!group) { group = { workspace: wsName, threads: [] }; workspaces.push(group); }
                             group.threads.push({ name, time });
@@ -867,9 +1019,63 @@ async function switchAgentThread(port, threadName) {
             const client = await CDP({ target: target.webSocketDebuggerUrl });
             const { Runtime } = client;
             await Runtime.enable();
+            
+            // First check if Standalone Agent 2.0 UI is active (presence of project cards in DOM)
+            const isStandaloneRes = await Runtime.evaluate({
+                expression: `(() => {
+                    if (window.location.href && window.location.href.includes('vscode-')) return false;
+                    return !!(document.querySelector('[data-project-card="true"]') || 
+                              document.querySelector('[data-workspace-card="true"]') ||
+                              document.querySelector('[data-project-card]') ||
+                              document.querySelector('[data-workspace-card]'));
+                })()`,
+                returnByValue: true
+            });
+            
+            if (isStandaloneRes.result?.value) {
+                const threadNameStr = JSON.stringify(threadName);
+                const clickRes = await Runtime.evaluate({
+                    expression: `(() => {
+                        if (document.title.trim() === ${threadNameStr}) {
+                            return 'already-active';
+                        }
+                        
+                        const convoEls = Array.from(document.querySelectorAll('div[role="button"]'))
+                            .filter(el => el.className && typeof el.className === 'string' && el.className.includes('ml-[22px]'));
+                        
+                        const target = convoEls.find(el => {
+                            const titleEl = el.querySelector('span.truncate, span.text-sm span');
+                            const name = titleEl ? titleEl.textContent.trim() : el.textContent.trim();
+                            return name === ${threadNameStr};
+                        });
+                        
+                        if (target) {
+                            target.click();
+                            return 'clicked';
+                        }
+                        return false;
+                    })()`,
+                    returnByValue: true
+                });
+                
+                await client.close();
+                
+                if (clickRes.result?.value === 'clicked') {
+                    console.log(`[switchAgentThread] Clicked thread "${threadName}", waiting 2500ms...`);
+                    await new Promise(r => setTimeout(r, 2500));
+                    return target.id;
+                } else if (clickRes.result?.value === 'already-active') {
+                    console.log(`[switchAgentThread] Thread "${threadName}" is already active, skipping click.`);
+                    return target.id;
+                }
+                console.log(`[switchAgentThread] Target thread "${threadName}" not found in sidebar.`);
+                continue;
+            }
+            
+            // Fallback for Classic IDE:
             const openRes = await Runtime.evaluate({
                 expression: `(() => {
-                    const existing = document.querySelector('input[placeholder="Select a conversation"]');
+                    const existing = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
                     if (existing) return "already-open";
                     const icon = document.querySelector("svg.lucide-history");
                     if (!icon) return "no-icon";
@@ -882,7 +1088,7 @@ async function switchAgentThread(port, threadName) {
             const threadNameStr = JSON.stringify(threadName);
             const res = await Runtime.evaluate({
                 expression: `(() => {
-                    const input = document.querySelector('input[placeholder="Select a conversation"]');
+                    const input = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
                     if (!input) return false;
                     let container = input;
                     for (let i = 0; i < 15; i++) { if (container.parentElement) container = container.parentElement; }
@@ -965,33 +1171,12 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
     let threadName = null;
     let workspaceName = null;
 
-    // 1. Get Thread ID via DOM fallback or preferred method
     let candidates = await resolveTargets(port, false);
     if (specificTargetId) {
         candidates = candidates.filter(t => t.id === specificTargetId);
     }
-    try {
-        const brainPath = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
-        if (fs.existsSync(brainPath)) {
-            const dirs = fs.readdirSync(brainPath, { withFileTypes: true });
-            let latestTime = 0;
-            
-            for (const dir of dirs) {
-                if (!dir.isDirectory()) continue;
-                const logPath = path.join(brainPath, dir.name, '.system_generated', 'logs', 'overview.txt');
-                if (fs.existsSync(logPath)) {
-                    const stats = fs.statSync(logPath);
-                    if (stats.mtimeMs > latestTime) {
-                        latestTime = stats.mtimeMs;
-                        threadId = dir.name;
-                    }
-                }
-            }
-        }
-    } catch(e) { console.debug(`[getActiveThreadInfo] fallback error: ${e.message}`); }
 
-    // 2. Get Name and Workspace from the DOM
-    if (!specificTargetId) candidates = await resolveTargets(port, false);
+    // 1. Try to get Name, Workspace, and Thread ID from the DOM
     for (const target of candidates) {
         try {
             const client = await withTimeout(CDP({ target: target.webSocketDebuggerUrl }), 2000, "CDP timeout");
@@ -1016,8 +1201,34 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                                     break;
                                 }
                             }
+                            // Standalone 2.0 fallback
+                            if (!name) {
+                                name = document.title;
+                            }
                         }
-                        return { name, workspace: document.title };
+                        let workspace = null;
+                        const wsEl = document.querySelector('div.text-sm.font-medium.truncate');
+                        if (wsEl) {
+                            workspace = wsEl.textContent.trim();
+                        } else {
+                            workspace = document.title;
+                        }
+
+                        // Try to find active conversation ID via DOM
+                        let threadIdVal = null;
+                        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+                        const labels = Array.from(document.querySelectorAll('[aria-label*="brain/"], .monaco-icon-label'));
+                        for (let el of labels) {
+                            const aria = el.getAttribute('aria-label') || '';
+                            if (aria.includes('brain/')) {
+                                const match = aria.match(uuidRegex);
+                                if (match) {
+                                    threadIdVal = match[0];
+                                    break;
+                                }
+                            }
+                        }
+                        return { name, workspace, threadId: threadIdVal };
                     })()
                 `,
                 returnByValue: true
@@ -1026,15 +1237,43 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
             
             if (res.result?.value) {
                 if (res.result.value.name) threadName = res.result.value.name;
+                if (res.result.value.threadId) threadId = res.result.value.threadId;
                 
                 let wsName = res.result.value.workspace;
                 if (wsName && wsName.includes(' - ')) wsName = wsName.split(' - ')[0].trim();
                 if (wsName && wsName !== 'undefined' && wsName !== 'Launchpad') workspaceName = wsName;
                 
-                // If we found a valid name, we can break
-                if (res.result.value.name) break;
+                if (threadName) break;
             }
         } catch(e) { console.debug(`[getActiveThreadInfo] target error: ${e.message}`); }
+    }
+
+    if (!threadId && threadName) {
+        threadId = findConversationIdByTitle(threadName);
+    }
+
+    // 2. Fallback: Get Thread ID via file-system logs of the app
+    if (!threadId) {
+        try {
+            const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
+            const brainPath = path.join(os.homedir(), '.gemini', appDataName, 'brain');
+            if (fs.existsSync(brainPath)) {
+                const dirs = fs.readdirSync(brainPath, { withFileTypes: true });
+                let latestTime = 0;
+                
+                for (const dir of dirs) {
+                    if (!dir.isDirectory()) continue;
+                    const logPath = path.join(brainPath, dir.name, '.system_generated', 'logs', 'overview.txt');
+                    if (fs.existsSync(logPath)) {
+                        const stats = fs.statSync(logPath);
+                        if (stats.mtimeMs > latestTime) {
+                            latestTime = stats.mtimeMs;
+                            threadId = dir.name;
+                        }
+                    }
+                }
+            }
+        } catch(e) { console.debug(`[getActiveThreadInfo] fallback error: ${e.message}`); }
     }
 
     if (threadId) {
@@ -1117,7 +1356,67 @@ async function getCurrentModel(port) {
     return null;
 }
 
+async function switchStandaloneWorkspace(port, wsName) {
+    if (!wsName) return false;
+    const cleanWsName = wsName.trim().toLowerCase();
+    const candidates = await resolveTargets(port, false);
+    for (const target of candidates) {
+        try {
+            const client = await CDP({ target: target.webSocketDebuggerUrl });
+            const { Runtime } = client;
+            await Runtime.enable();
+            
+            // First check if Standalone Agent 2.0 UI is active (presence of project cards in DOM)
+            const isStandaloneRes = await Runtime.evaluate({
+                expression: `(() => {
+                    return !!document.querySelector('[data-project-card="true"]');
+                })()`,
+                returnByValue: true
+            });
+            
+            if (isStandaloneRes.result?.value) {
+                const cleanWsNameStr = JSON.stringify(cleanWsName);
+                const clickRes = await Runtime.evaluate({
+                    expression: `(() => {
+                        const cards = Array.from(document.querySelectorAll('[data-project-card="true"]'));
+                        const cleanWsName = ${cleanWsNameStr};
+                        
+                        const targetCard = cards.find(card => {
+                            const cloned = card.cloneNode(true);
+                            cloned.querySelectorAll('svg').forEach(el => el.remove());
+                            const wsNameRaw = cloned.textContent.trim();
+                            // Clean trailing numbers like "alana.com.tr 3" -> "alana.com.tr"
+                            const wsNameCleaned = wsNameRaw.replace(/\\s+\\d+$/, '').trim().toLowerCase();
+                            
+                            return wsNameCleaned === cleanWsName || wsNameCleaned.includes(cleanWsName) || cleanWsName.includes(wsNameCleaned);
+                        });
+                        
+                        if (targetCard) {
+                            targetCard.click();
+                            return true;
+                        }
+                        return false;
+                    })()`,
+                    returnByValue: true
+                });
+                
+                await client.close();
+                if (clickRes.result?.value) {
+                    console.log(`[switchStandaloneWorkspace] Successfully clicked workspace card for: ${wsName}`);
+                    return true;
+                }
+            } else {
+                await client.close();
+            }
+        } catch (e) {
+            console.debug(`[switchStandaloneWorkspace] Error focusing workspace ${wsName}: ${e.message}`);
+        }
+    }
+    return false;
+}
+
 module.exports = {
+    findConversationIdByTitle,
     isAgentWorking,
     getFullLatestResponse,
     snapshotChatState,
@@ -1143,7 +1442,8 @@ module.exports = {
     switchAgentThread,
     getActiveThreadId,
     getActiveThreadInfo,
-    setActiveWorkspace
+    setActiveWorkspace,
+    switchStandaloneWorkspace
 };
 
 async function captureFullIDEScreenshot(port) {
@@ -1364,10 +1664,10 @@ async function getQuota(_port, t) {
         }
 
         if (!csrfToken || !lsPid) {
-            console.log('[Quota] Language server bulunamadı');
+            console.log('[Quota] Language server not found');
             return null;
         }
-        console.log(`[Quota] LS bulundu: PID=${lsPid}, token=${csrfToken.substring(0, 8)}...`);
+        console.log(`[Quota] LS found: PID=${lsPid}, token=${csrfToken.substring(0, 8)}...`);
 
         // 2. Discover ports the language server is listening on
         let ports = [];
@@ -1387,7 +1687,7 @@ async function getQuota(_port, t) {
             } catch(e2) {}
         }
 
-        if (ports.length === 0) { console.log('[Quota] LS port bulunamadı'); return null; }
+        if (ports.length === 0) { console.log('[Quota] LS port not found'); return null; }
         console.log(`[Quota] Portlar: ${ports.join(', ')}`);
 
         // 3. Probe ports with Connect RPC GetUserStatus
@@ -1462,7 +1762,7 @@ async function getQuota(_port, t) {
             result.push('');
             result.push(t ? t('quota.model_quota') : '⏱️ Model Kota Durumu:');
 
-            // Sort models: Gemini > Claude > others, so best representative is picked per group
+            // Sort models: Gemini > Claude > others
             const priority = (label) => {
                 if (label.includes('Gemini')) return 0;
                 if (label.includes('Claude')) return 1;
@@ -1470,42 +1770,37 @@ async function getQuota(_port, t) {
             };
             const sorted = [...configs].sort((a, b) => priority(a.label || '') - priority(b.label || ''));
 
-            // Group models by same quota (remainingFraction + resetTime) to avoid duplicates
-            const seen = new Map();
             for (const m of sorted) {
                 const modelId = m.modelOrAlias?.model || 'unknown';
                 const label = m.label || modelId;
                 // Skip autocomplete models and GPT-OSS
                 if (modelId.includes('gemini-2.5') || label.includes('Gemini 2.5')) continue;
                 if (modelId.includes('GPT_OSS') || label.includes('GPT-OSS') || label.includes('GPT OSS')) continue;
-
-                const rem = m.quotaInfo?.remainingFraction;
-                const resetTime = m.quotaInfo?.resetTime || '';
-                const key = `${rem}|${resetTime}`;
-
-                if (seen.has(key)) continue;
-                seen.set(key, label);
+                // Skip base models and redundant Medium/Low tiers to keep the list clean
+                if (label.includes('Gemini 1.5')) continue;
+                if (label.includes('(Medium)') || label.includes('(Low)')) continue;
 
                 let line = `🤖 ${label}`;
                 if (m.quotaInfo) {
-                    if (typeof rem === 'number') {
-                        const remPct = Math.round(rem * 100);
-                        const filled = Math.round(rem * 8);
-                        const empty = 8 - filled;
-                        const bar = '█'.repeat(filled) + '░'.repeat(empty);
-                        const icon = rem > 0.5 ? '🟢' : rem > 0.2 ? '🟡' : '🔴';
-                        const remText = t ? t('quota.remaining', { pct: remPct }) : ` %${remPct} kalan`;
-                        line += ` ${icon} ${bar}${remText}`;
+                    const rem = m.quotaInfo.remainingFraction;
+                    if (rem !== undefined) {
+                        const pct = Math.round(rem * 100);
+                        const bars = Math.round(rem * 8);
+                        const filled = '█'.repeat(bars);
+                        const empty = '▒'.repeat(8 - bars);
+                        let icon = '🟢';
+                        if (pct < 50) icon = '🟡';
+                        if (pct < 15) icon = '🔴';
+                        line += ` ${icon} ${filled}${empty} %${pct} kalan`;
                     }
-                    if (resetTime) {
+                    if (m.quotaInfo.resetTime) {
                         try {
-                            const diff = new Date(resetTime).getTime() - Date.now();
+                            const rt = new Date(m.quotaInfo.resetTime);
+                            const diff = rt - new Date();
                             if (diff > 0) {
-                                const hours = Math.floor(diff / 3600000);
+                                const hrs = Math.floor(diff / 3600000);
                                 const mins = Math.floor((diff % 3600000) / 60000);
-                                // Since 'sa' and 'dk' are universal enough we can keep them or use a simplified approach
-                                // However, keeping ⏳ Xh Ym or ⏳ Xsa Ydk
-                                line += t && t('lang.current') ? ` ⏳ ${hours}h ${mins}m` : ` ⏳ ${hours}sa ${mins}dk`;
+                                line += t ? t('quota.reset_time', { hours: hrs, mins: mins }) : ` ⏳ ${hrs}sa ${mins}dk`;
                             }
                         } catch(e) {}
                     }

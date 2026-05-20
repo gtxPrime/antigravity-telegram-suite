@@ -8,14 +8,14 @@
   },
   "help": {
     "title": "🤖 <b>Mevcut Komutlar:</b>",
-    "messaging_title": "📝 <i>Mesajlaşma &amp; Etkileşim:</i>",
-    "messaging_text": "- Sadece yazı yazarak → Ajanla konuşur (Headless mod)\n- 📎 Resim/Dosya göndererek → Ajana dosya iletir (caption desteklenir)",
-    "status_title": "👁️ <i>Durum &amp; Bilgi:</i>",
-    "status_text": "- /latest → Son yanıtı getirir (temizlenmiş)\n- /screenshot → IDE ekran görüntüsü alır\n- /status → Sistem durumu (IDE, CDP, PM2)",
-    "ide_title": "🛠️ <i>IDE Kontrolleri:</i>",
-    "ide_text": "- /start_ide → IDE kapalıysa başlatır\n- /close → IDE'yi tamamen kapatır (tüm process + lock temizler)\n- /workspace → Projeyi değiştirir\n- /window → Aktif IDE penceresini seçer\n- /lang → Dil değiştirir\n- /cmd &lt;komut&gt; → Terminalde komut çalıştırır\n- /help → Bu yardım mesajını gösterir",
+    "messaging_title": "📝 <i>Mesajlaşma & Etkileşim:</i>",
+    "messaging_text": "- Sadece yazı yazarak → Ajanla konuşur\n- 📎 Dosya göndererek → Ajana dosya iletir\n- /stop → Çalışan ajanı durdurur\n- /file → Dosya gezginini açar\n- /turbo → Turbo planlama modunu açar\n- /panel → Kontrol klavyesini geri getirir",
+    "status_title": "👁️ <i>Durum & Bilgi:</i>",
+    "status_text": "- /latest → Son yanıtı getirir\n- /screenshot → IDE ekran görüntüsü alır\n- /status → Sistem durumunu gösterir\n- /quota → Kalan AI kotalarını gösterir\n- /version → Mevcut bot sürümünü gösterir\n- /update → Bot için güncellemeleri kontrol eder",
+    "ide_title": "🛠️ <i>Sistem Kontrolleri:</i>",
+    "ide_text": "- /start_ide → IDE/Agent kapalıysa başlatır\n- /close → Uygulamayı tamamen kapatır\n- /app → IDE ve Agent arasında geçiş yapar\n- /workspace → Projeyi değiştirir\n- /window → Aktif pencereyi seçer\n- /fix_shortcuts → Masaüstü kısayollarını onarır\n- /lang → Dil değiştirir\n- /menu → Menüyü yeniler\n- /cmd &lt;komut&gt; → Terminalde komut çalıştırır",
     "chat_title": "💬 <i>Sohbet Kontrolleri:</i>",
-    "chat_text": "- /new → Yeni sohbet açar\n- /agents → Son sohbetleri listeler ve değiştirir\n- /artifacts → Mevcut sohbetin artifact'lerini listeler\n- /model → Model seçimi menüsünü açar\n- /autoaccept → Otomatik kabul aç/kapat"
+    "chat_text": "- /new → Yeni sohbet açar\n- /agents → Son sohbetleri listeler\n- /artifacts → Artifact'leri listeler\n- /model → Kullanılacak modeli seçer\n- /autoaccept → Otomatik onay modunu açar/kapatır\n- /help → Bu yardım mesajını gösterir"
   },
   "ide": {
     "already_running": "✅ Antigravity IDE zaten çalışıyor! Ekstra pencere açmaya gerek yok.\n💡 Kapatmak için /close yazabilirsiniz.",
@@ -36,7 +36,9 @@
     "ide_stopped": "🔴 IDE: Kapalı",
     "cdp_active": "🟢 CDP Bağlantısı: Aktif",
     "cdp_inactive": "🔴 CDP Bağlantısı: Yok",
-    "bot_running": "🟢 Bot: Çalışıyor"
+    "bot_running": "🟢 Bot: Çalışıyor",
+    "autoaccept_on": "✅ ON",
+    "autoaccept_off": "❌ OFF"
   },
   "latest": {
     "title": "📝 Son Yanıt:\n\n",
@@ -88,7 +90,8 @@
     "cdp_warning": "\n⚠️ CDP bağlantısı henüz hazır olmayabilir. Birkaç saniye bekleyip tekrar deneyin.",
     "select_prompt": "Lütfen geçiş yapmak istediğiniz çalışma alanını seçin:",
     "read_error": "❌ Projects dizini okunamadı.",
-    "selected": "Workspace seçildi: {project}"
+    "selected": "Workspace seçildi: {project}",
+    "not_found_standalone": "❌ Project '{wsName}' could not be found or opened in Standalone App."
   },
   "file": {
     "empty_dir": "📂 Bu dizin boş.",
@@ -124,16 +127,21 @@
     "stop_desc": "Ajanı durdur",
     "autoaccept_desc": "Otomatik kabul aç/kapat",
     "quota_desc": "Kota durumunu gösterir",
-    "update_desc": "Güncelleme kontrol et ve güncelle",
+    "update_desc": "Güncellemeleri kontrol et",
     "version_desc": "Mevcut sürümü gösterir",
     "menu_desc": "Komut menüsünü güncelle",
     "window_desc": "IDE penceresi seç",
     "restart_desc": "Botu yeniden başlatır",
+    "app_desc": "Aktif uygulamayı seç",
+    "fix_shortcuts_desc": "Masaüstü kısayollarını onar",
     "btn_screenshot": "📸 Ekran",
     "btn_artifacts": "📦 Artifact'ler",
     "btn_auto_on": "⚡ Oto-Onay",
     "btn_auto_off": "🔴 Oto-Onay",
-    "btn_latest": "💬 Son Yanıt"
+    "btn_latest": "💬 Son Yanıt",
+    "start_ag_desc": "Ajanı başlatır",
+    "close_ide_desc": "IDE'yi kapatır",
+    "close_ag_desc": "Ajanı kapatır"
   },
   "photo": {
     "downloaded": "✅ Dosya indirildi ve ajana yönlendiriliyor...",
@@ -170,7 +178,8 @@
     "prompt_credits": "📊 Prompt Credits: {available}{monthly}",
     "model_quota": "⏱️ Model Kota Durumu:",
     "remaining": " %{pct} kalan",
-    "empty": " ⛔ TÜKENDİ"
+    "empty": " ⛔ TÜKENDİ",
+    "reset_time": " ⏳ {hours}sa {mins}dk"
   },
   "response_too_long": "⚠️ Yanıt çok uzun, /latest ile tam halini görebilirsiniz.",
   "window": {
@@ -218,7 +227,7 @@
     "p3_reviewing": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⏳ <b>Faz 3:</b> Claude yazılan kodu inceliyor...",
     "p3_error": "Claude inceleme aşamasında zaman aşımına uğradı.",
     "p4_switching": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Model değiştiriliyor (Gemini) - Düzeltme...",
-    "p4_fixing": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Gemini hataları düzeltiyor...",
+    "p4_fixing": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Gemini is fixing the issues...",
     "p4_error": "Gemini düzeltme aşamasında zaman aşımına uğradı.",
     "done_issues": "🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n⚠️ <b>Faz 3:</b> İnceleme (Claude)\n✅ <b>Faz 4:</b> Düzeltme (Gemini)\n\n✨ Sonuçlar geliyor...",
     "done_no_issues": "🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n✅ <b>Faz 3:</b> İnceleme - Sorun Yok (Claude)\n\n✨ Sonuçlar geliyor...",
@@ -226,5 +235,44 @@
     "p5_summarizing": "⏳ Faz 5: Sonuç özeti hazırlanıyor...",
     "done_summary": "✨ Turbo Mod Tamamlandı (Özet hazır)",
     "p5_error": "Özet aşamasında zaman aşımına uğradı."
+  },
+  "restart": {
+    "closing": "🔄 Closing Antigravity windows and restarting bot..."
+  },
+  "standalone": {
+    "already_running": "🤖 Antigravity Standalone is already running!",
+    "starting": "🚀 Starting Antigravity Standalone...",
+    "started": "✅ Antigravity Standalone started successfully.",
+    "not_installed": "❌ Start failed: Antigravity Standalone does not appear to be installed.",
+    "start_failed": "❌ Start error: {error}",
+    "already_closed": "ℹ️ Antigravity Standalone is already closed.",
+    "closing": "🔌 Closing Antigravity Standalone...",
+    "closed": "✅ Antigravity Standalone closed."
+  },
+  "close": {
+    "select_prompt": "⚠️ Please specify which app to close:\n\n👉 Standalone: /close_ag\n👉 IDE (Classic): /close_ide"
+  },
+  "cmd": {
+    "empty": "Please enter a command to run. Example: /cmd ls -la",
+    "running": "⏳ Running command:\n`{cmdStr}`",
+    "no_output": "✅ Command ran successfully (No output).",
+    "output_title": "💻 Command Output:"
+  },
+  "app": {
+    "select_prompt": "Please select the application you want to control. Both applications can run simultaneously and are controlled via independent ports:\n",
+    "auto_starting": "🚀 {appName} appears to be closed. Auto-starting...",
+    "started": "✅ {appName} started successfully."
+  },
+  "shortcuts": {
+    "scanning": "⏳ Scanning and updating desktop shortcuts, please wait...",
+    "error": "❌ Error occurred while updating shortcuts:\n<code>{error}</code>",
+    "not_found": "Not found on desktop or could not be changed",
+    "success": "\n✨ <b>Success!</b> A total of <b>{count}</b> shortcuts updated. The bot will now be able to automatically connect when you launch applications from the desktop.",
+    "start_error": "❌ Process could not be started: {error}"
+  },
+  "update": {
+    "checking": "🔍 Checking for updates...",
+    "error": "❌ Update error: {error}",
+    "success": "✅ Code updated and dependencies installed.\nBot is restarting now..."
   }
 }

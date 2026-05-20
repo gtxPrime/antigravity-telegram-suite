@@ -9,13 +9,13 @@
   "help": {
     "title": "🤖 <b>Available Commands:</b>",
     "messaging_title": "📝 <i>Messaging &amp; Interaction:</i>",
-    "messaging_text": "- Just type text → Talk to the agent (headless mode)\n- 📎 Send image/file → Forward to agent (caption supported)",
+    "messaging_text": "- Just type text → Talk to the agent\n- 📎 Send image/file → Forward to agent\n- /stop → Stop running agent\n- /file → Open file explorer\n- /turbo → Toggle turbo planning mode\n- /panel → Bring back control panel",
     "status_title": "👁️ <i>Status &amp; Info:</i>",
-    "status_text": "- /latest → Get latest response (cleaned)\n- /screenshot → Take IDE screenshot\n- /status → System status (IDE, CDP, PM2)",
-    "ide_title": "🛠️ <i>IDE Controls:</i>",
-    "ide_text": "- /start_ide → Start the IDE if closed\n- /close → Fully close the IDE (kill process + clean locks)\n- /workspace → Switch project workspace\n- /window → Select active IDE window\n- /lang → Switch language\n- /cmd &lt;command&gt; → Run a terminal command\n- /help → Show this help message",
+    "status_text": "- /latest → Get latest response\n- /screenshot → Take IDE screenshot\n- /status → System status\n- /quota → Check AI quotas\n- /version → Show bot version\n- /update → Check for bot updates",
+    "ide_title": "🛠️ <i>System Controls:</i>",
+    "ide_text": "- /start_ide → Start IDE/Agent if closed\n- /close → Fully close the app\n- /app → Switch between IDE and Agent\n- /workspace → Switch project\n- /window → Select active window\n- /fix_shortcuts → Fix desktop shortcuts\n- /lang → Switch language\n- /menu → Refresh menu\n- /cmd &lt;command&gt; → Run a terminal command",
     "chat_title": "💬 <i>Chat Controls:</i>",
-    "chat_text": "- /new → Open a new chat\n- /agents → List and switch recent chat threads\n- /artifacts → List artifacts of current thread\n- /model → Open model selection menu\n- /autoaccept → Toggle auto-accept on/off"
+    "chat_text": "- /new → Open a new chat\n- /agents → List recent chats\n- /artifacts → List artifacts\n- /model → Select model to use\n- /autoaccept → Toggle auto-accept\n- /help → Show this help message"
   },
   "ide": {
     "already_running": "✅ Antigravity IDE is already running! No need to open another window.\n💡 Use /close to shut it down.",
@@ -36,7 +36,9 @@
     "ide_stopped": "🔴 IDE: Stopped",
     "cdp_active": "🟢 CDP Connection: Active",
     "cdp_inactive": "🔴 CDP Connection: Inactive",
-    "bot_running": "🟢 Bot: Running"
+    "bot_running": "🟢 Bot: Running",
+    "autoaccept_on": "✅ ON",
+    "autoaccept_off": "❌ OFF"
   },
   "latest": {
     "title": "📝 Latest Response:\n\n",
@@ -88,7 +90,8 @@
     "cdp_warning": "\n⚠️ CDP connection may not be ready yet. Wait a few seconds and try again.",
     "select_prompt": "Please select the workspace you want to switch to:",
     "read_error": "❌ Could not read projects directory.",
-    "selected": "Workspace selected: {project}"
+    "selected": "Workspace selected: {project}",
+    "not_found_standalone": "❌ Project '{wsName}' could not be found or opened in Standalone App."
   },
   "file": {
     "empty_dir": "📂 This directory is empty.",
@@ -124,16 +127,21 @@
     "stop_desc": "Stop the agent",
     "autoaccept_desc": "Toggle auto-accept on/off",
     "quota_desc": "Shows Antigravity quota usage",
-    "update_desc": "Check for updates and auto-update",
+    "update_desc": "Check for updates",
     "version_desc": "Show current version",
     "menu_desc": "Update the command menu",
     "window_desc": "Select IDE window",
     "restart_desc": "Restart the bot",
+    "app_desc": "Select active application",
+    "fix_shortcuts_desc": "Fix desktop shortcuts",
     "btn_screenshot": "📸 Screen",
     "btn_artifacts": "📦 Artifacts",
     "btn_auto_on": "⚡ Auto",
     "btn_auto_off": "🔴 Auto",
-    "btn_latest": "💬 Latest"
+    "btn_latest": "💬 Latest",
+    "start_ag_desc": "Start Agent",
+    "close_ide_desc": "Close IDE",
+    "close_ag_desc": "Close Agent"
   },
   "photo": {
     "downloaded": "✅ File downloaded and forwarding to agent...",
@@ -170,7 +178,8 @@
     "prompt_credits": "📊 Prompt Credits: {available}{monthly}",
     "model_quota": "⏱️ Model Quota Status:",
     "remaining": " {pct}% remaining",
-    "empty": " ⛔ EXHAUSTED"
+    "empty": " ⛔ EXHAUSTED",
+    "reset_time": " ⏳ {hours}h {mins}m"
   },
   "response_too_long": "⚠️ Response too long. Use /latest to see the full version.",
   "window": {
@@ -226,5 +235,44 @@
     "p5_summarizing": "⏳ Phase 5: Preparing executive summary...",
     "done_summary": "✨ Turbo Mode Complete (Summary ready)",
     "p5_error": "Summary phase timed out."
+  },
+  "restart": {
+    "closing": "🔄 Closing Antigravity windows and restarting bot..."
+  },
+  "standalone": {
+    "already_running": "🤖 Antigravity Standalone is already running!",
+    "starting": "🚀 Starting Antigravity Standalone...",
+    "started": "✅ Antigravity Standalone started successfully.",
+    "not_installed": "❌ Start failed: Antigravity Standalone does not appear to be installed.",
+    "start_failed": "❌ Start error: {error}",
+    "already_closed": "ℹ️ Antigravity Standalone is already closed.",
+    "closing": "🔌 Closing Antigravity Standalone...",
+    "closed": "✅ Antigravity Standalone closed."
+  },
+  "close": {
+    "select_prompt": "⚠️ Please specify which app to close:\n\n👉 Standalone: /close_ag\n👉 IDE (Classic): /close_ide"
+  },
+  "cmd": {
+    "empty": "Please enter a command to run. Example: /cmd ls -la",
+    "running": "⏳ Running command:\n`{cmdStr}`",
+    "no_output": "✅ Command ran successfully (No output).",
+    "output_title": "💻 Command Output:"
+  },
+  "app": {
+    "select_prompt": "Please select the application you want to control. Both applications can run simultaneously and are controlled via independent ports:\n",
+    "auto_starting": "🚀 {appName} appears to be closed. Auto-starting...",
+    "started": "✅ {appName} started successfully."
+  },
+  "shortcuts": {
+    "scanning": "⏳ Scanning and updating desktop shortcuts, please wait...",
+    "error": "❌ Error occurred while updating shortcuts:\n<code>{error}</code>",
+    "not_found": "Not found on desktop or could not be changed",
+    "success": "\n✨ <b>Success!</b> A total of <b>{count}</b> shortcuts updated. The bot will now be able to automatically connect when you launch applications from the desktop.",
+    "start_error": "❌ Process could not be started: {error}"
+  },
+  "update": {
+    "checking": "🔍 Checking for updates...",
+    "error": "❌ Update error: {error}",
+    "success": "✅ Code updated and dependencies installed.\nBot is restarting now..."
   }
 }

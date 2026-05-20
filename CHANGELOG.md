@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-05-21
+
+### Added
+- **Dual-Port CDP Support**: Run Antigravity IDE and Standalone App simultaneously with independent CDP ports (`AGENT_CDP_PORT` / `IDE_CDP_PORT`)
+- **Default Model Selection**: New `DEFAULT_MODEL` env var — automatically selects your preferred AI model on IDE startup and new chat creation
+- **Standalone App Commands**: `/start_ag`, `/close_ag` for independent Standalone App lifecycle management
+- **App Switcher** (`/app`): Switch active target between IDE and Standalone App
+- **Desktop Shortcut Fixer** (`/fix_shortcuts`): Automatically update desktop shortcuts to include CDP debugging flags
+
+### Fixed
+- **Complete i18n Audit**: Eliminated 50+ hardcoded Turkish strings that appeared regardless of `LANGUAGE` setting
+- **IDE 2.0 IPC Socket Discovery**: Fixed workspace opening failures caused by changed socket naming convention (`vscode-*-main.sock`)
+- **IDE 2.0 DOM Selectors**: Updated history panel selectors for changed placeholder text and CSS classes in Antigravity IDE 2.0
+- **Standalone App Launch**: Fixed `cli.js` detection for Electron apps that don't ship a CLI script (Standalone 2.0)
+
+### Changed
+- **`.env.example` Updated**: Now includes all current configuration options with documentation
+- **Architecture Docs**: README updated with new files, commands, and known issues
+
+### Known Issues
+- Some features may not work with Standalone Antigravity App. Antigravity IDE remains fully supported. As a developer, I recommend using the IDE for the best experience.
+
 ## [2.2.3] - 2026-05-04
 
 ### Fixed

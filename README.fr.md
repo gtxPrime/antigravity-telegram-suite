@@ -115,6 +115,16 @@ pm2 startup
 | `/stop` | Arrêter l'agent en cours d'exécution |
 | `/agents` | Lister et basculer entre les discussions |
 
+
+## ⚠️ Known Issues
+
+| Issue | Details |
+|-------|---------|
+| **Standalone App Limitations** | Some features (workspace switching, thread management) may not work reliably with the Standalone Antigravity App. **Antigravity IDE is fully supported and recommended.** |
+| **Auto-Update on IDE 2.0** | If Antigravity IDE auto-updates, DOM selectors may break until the bot is also updated. |
+
+> 💡 As a developer, I prefer to focus on IDE support. The Standalone App integration is provided on a best-effort basis.
+
 ## 🤝 Contribuer
 
 1. Forkez le dépôt

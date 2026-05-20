@@ -9,13 +9,13 @@
   "help": {
     "title": "🤖 <b>Comandos Disponibles:</b>",
     "messaging_title": "📝 <i>Mensajería e Interacción:</i>",
-    "messaging_text": "- Solo escribe texto → Habla con el agente (modo headless)\n- 📎 Envía imagen/archivo → Reenvía al agente (soporta descripción)",
+    "messaging_text": "- Solo escribe texto → Habla con el agente\n- 📎 Enviar imagen/archivo → Reenviar al agente\n- /stop → Detener al agente\n- /file → Abrir explorador de archivos\n- /turbo → Alternar modo turbo\n- /panel → Restaurar panel de control",
     "status_title": "👁️ <i>Estado e Info:</i>",
-    "status_text": "- /latest → Obtener última respuesta (limpia)\n- /screenshot → Tomar captura de pantalla del IDE\n- /status → Estado del sistema (IDE, CDP, PM2)",
-    "ide_title": "🛠️ <i>Controles del IDE:</i>",
-    "ide_text": "- /start_ide → Iniciar el IDE si está cerrado\n- /close → Cerrar el IDE completamente (mata el proceso + limpia bloqueos)\n- /new → Abrir un nuevo chat\n- /model → Abrir menú de selección de modelo\n- /workspace → Cambiar espacio de trabajo del proyecto\n- /autoaccept → Activar/desactivar auto-aceptar\n- /lang → Cambiar idioma\n- /cmd &lt;comando&gt; → Ejecutar un comando de terminal\n- /help → Mostrar este mensaje de ayuda",
+    "status_text": "- /latest → Obtener última respuesta\n- /screenshot → Captura de pantalla del IDE\n- /status → Estado del sistema\n- /quota → Verificar cuotas de IA\n- /version → Mostrar versión del bot\n- /update → Buscar actualizaciones",
+    "ide_title": "🛠️ <i>Controles del Sistema:</i>",
+    "ide_text": "- /start_ide → Iniciar IDE/Agente\n- /close → Cerrar aplicación completamente\n- /app → Cambiar entre IDE y Agente\n- /workspace → Cambiar de proyecto\n- /window → Seleccionar ventana activa\n- /fix_shortcuts → Reparar accesos directos\n- /lang → Cambiar idioma\n- /menu → Actualizar menú\n- /cmd &lt;comando&gt; → Ejecutar un comando en terminal",
     "chat_title": "💬 <i>Controles de Chat:</i>",
-    "chat_text": "- /new → Abrir nuevo chat\n- /agents → Listar y cambiar hilos de chat recientes\n- /artifacts → Listar artefactos del hilo actual\n- /model → Abrir menú de selección de modelo\n- /autoaccept → Activar/desactivar auto-aceptar"
+    "chat_text": "- /new → Abrir nuevo chat\n- /agents → Listar chats recientes\n- /artifacts → Listar artefactos\n- /model → Seleccionar modelo\n- /autoaccept → Alternar auto-aceptar\n- /help → Mostrar este mensaje de ayuda"
   },
   "ide": {
     "already_running": "✅ ¡El IDE Antigravity ya se está ejecutando! No es necesario abrir otra ventana.\n💡 Usa /close para apagarlo.",
@@ -36,7 +36,9 @@
     "ide_stopped": "🔴 IDE: Detenido",
     "cdp_active": "🟢 Conexión CDP: Activa",
     "cdp_inactive": "🔴 Conexión CDP: Inactiva",
-    "bot_running": "🟢 Bot: En ejecución"
+    "bot_running": "🟢 Bot: En ejecución",
+    "autoaccept_on": "✅ ON",
+    "autoaccept_off": "❌ OFF"
   },
   "latest": {
     "title": "📝 Última Respuesta:\n\n",
@@ -85,7 +87,8 @@
     "cdp_warning": "\n⚠️ Es posible que la conexión CDP aún no esté lista. Espera unos segundos e inténtalo de nuevo.",
     "select_prompt": "Por favor selecciona el espacio de trabajo al que quieres cambiar:",
     "read_error": "❌ No se pudo leer el directorio de proyectos.",
-    "selected": "Espacio de trabajo seleccionado: {project}"
+    "selected": "Espacio de trabajo seleccionado: {project}",
+    "not_found_standalone": "❌ Project '{wsName}' could not be found or opened in Standalone App."
   },
   "file": {
     "empty_dir": "📂 Este directorio está vacío.",
@@ -107,7 +110,7 @@
     "latest_desc": "Obtener última respuesta",
     "screenshot_desc": "Tomar captura del IDE",
     "status_desc": "Estado del sistema",
-    "start_ide_desc": "Iniciar el IDE",
+    "start_ide_desc": "Iniciar IDE",
     "close_desc": "Cerrar completamente el IDE",
     "new_desc": "Abrir nuevo chat",
     "model_desc": "Menú de selección de modelo",
@@ -118,7 +121,7 @@
     "stop_desc": "Detener al agente",
     "autoaccept_desc": "Activar/desactivar auto-aceptar",
     "quota_desc": "Mostrar uso de cuota",
-    "update_desc": "Buscar actualizaciones y actualizar auto.",
+    "update_desc": "Buscar actualizaciones",
     "version_desc": "Mostrar versión actual",
     "menu_desc": "Actualizar menú de comandos",
     "close_window_desc": "Cerrar ventana actual",
@@ -130,7 +133,12 @@
     "btn_artifacts": "📦 Artefactos",
     "btn_auto_on": "⚡ Auto",
     "btn_auto_off": "🔴 Auto",
-    "btn_latest": "💬 Último"
+    "btn_latest": "💬 Último",
+    "start_ag_desc": "Iniciar Agente",
+    "close_ide_desc": "Cerrar IDE",
+    "close_ag_desc": "Cerrar Agente",
+    "app_desc": "Seleccionar aplicación activa",
+    "fix_shortcuts_desc": "Reparar accesos directos"
   },
   "photo": {
     "downloaded": "✅ Archivo descargado y reenviando al agente...",
@@ -167,7 +175,8 @@
     "prompt_credits": "📊 Créditos de Prompt: {available}{monthly}",
     "model_quota": "⏱️ Estado Cuota de Modelo:",
     "remaining": " {pct}% restante",
-    "empty": " ⛔ AGOTADO"
+    "empty": " ⛔ AGOTADO",
+    "reset_time": " ⏳ {hours}h {mins}m"
   },
   "response_too_long": "⚠️ Respuesta demasiado larga. Usa /latest para ver la versión completa.",
   "window": {
@@ -215,7 +224,7 @@
     "p3_reviewing": "🚀 <b>Modo Turbo Activo:</b>\n\n✅ <b>Fase 1:</b> Planificación\n✅ <b>Fase 2:</b> Codificación\n⏳ <b>Fase 3:</b> Claude está revisando el código...",
     "p3_error": "Tiempo de espera agotado para Claude en la fase de revisión.",
     "p4_switching": "🚀 <b>Modo Turbo Activo:</b>\n\n✅ <b>Fase 1:</b> Planificación\n✅ <b>Fase 2:</b> Codificación\n⚠️ <b>Fase 3:</b> ¡Se encontraron problemas!\n⏳ <b>Fase 4:</b> Cambiando modelo (Gemini) - Corrigiendo...",
-    "p4_fixing": "🚀 <b>Modo Turbo Activo:</b>\n\n✅ <b>Fase 1:</b> Planificación\n✅ <b>Fase 2:</b> Codificación\n⚠️ <b>Fase 3:</b> ¡Se encontraron problemas!\n⏳ <b>Fase 4:</b> Gemini está corrigiendo los problemas...",
+    "p4_fixing": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Gemini is fixing the issues...",
     "p4_error": "Tiempo de espera agotado para Gemini en la fase de corrección.",
     "done_issues": "🚀 <b>Modo Turbo Completado:</b>\n\n✅ <b>Fase 1:</b> Planificación (Claude)\n✅ <b>Fase 2:</b> Codificación (Gemini)\n⚠️ <b>Fase 3:</b> Revisión (Claude)\n✅ <b>Fase 4:</b> Corrección (Gemini)\n\n✨ Resultados entrantes...",
     "done_no_issues": "🚀 <b>Modo Turbo Completado:</b>\n\n✅ <b>Fase 1:</b> Planificación (Claude)\n✅ <b>Fase 2:</b> Codificación (Gemini)\n✅ <b>Fase 3:</b> Revisión - Sin Problemas (Claude)\n\n✨ Resultados entrantes...",
@@ -223,5 +232,44 @@
     "p5_summarizing": "⏳ Fase 5: Preparando resumen de resultados...",
     "done_summary": "✨ Modo Turbo Completado (Resumen listo)",
     "p5_error": "Tiempo agotado en la fase de resumen."
+  },
+  "restart": {
+    "closing": "🔄 Closing Antigravity windows and restarting bot..."
+  },
+  "standalone": {
+    "already_running": "🤖 Antigravity Standalone is already running!",
+    "starting": "🚀 Starting Antigravity Standalone...",
+    "started": "✅ Antigravity Standalone started successfully.",
+    "not_installed": "❌ Start failed: Antigravity Standalone does not appear to be installed.",
+    "start_failed": "❌ Start error: {error}",
+    "already_closed": "ℹ️ Antigravity Standalone is already closed.",
+    "closing": "🔌 Closing Antigravity Standalone...",
+    "closed": "✅ Antigravity Standalone closed."
+  },
+  "close": {
+    "select_prompt": "⚠️ Please specify which app to close:\n\n👉 Standalone: /close_ag\n👉 IDE (Classic): /close_ide"
+  },
+  "cmd": {
+    "empty": "Please enter a command to run. Example: /cmd ls -la",
+    "running": "⏳ Running command:\n`{cmdStr}`",
+    "no_output": "✅ Command ran successfully (No output).",
+    "output_title": "💻 Command Output:"
+  },
+  "app": {
+    "select_prompt": "Please select the application you want to control. Both applications can run simultaneously and are controlled via independent ports:\n",
+    "auto_starting": "🚀 {appName} appears to be closed. Auto-starting...",
+    "started": "✅ {appName} started successfully."
+  },
+  "shortcuts": {
+    "scanning": "⏳ Scanning and updating desktop shortcuts, please wait...",
+    "error": "❌ Error occurred while updating shortcuts:\n<code>{error}</code>",
+    "not_found": "Not found on desktop or could not be changed",
+    "success": "\n✨ <b>Success!</b> A total of <b>{count}</b> shortcuts updated. The bot will now be able to automatically connect when you launch applications from the desktop.",
+    "start_error": "❌ Process could not be started: {error}"
+  },
+  "update": {
+    "checking": "🔍 Checking for updates...",
+    "error": "❌ Update error: {error}",
+    "success": "✅ Code updated and dependencies installed.\nBot is restarting now..."
   }
 }

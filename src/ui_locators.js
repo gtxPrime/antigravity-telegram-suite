@@ -2,30 +2,26 @@
  * UI Locators Module
  * 
  * Centralized registry for all DOM traversal and element querying logic.
- * This script is injected into the IDE via Chrome DevTools Protocol (CDP) 
+ * This script is injected into the IDE or Standalone Agent UI via Chrome DevTools Protocol (CDP) 
  * prior to evaluating any bot actions.
  * 
- * By maintaining a single source of truth for all CSS selectors, the bot 
- * becomes highly resilient to IDE UI changes and avoids extracting data from 
- * hidden or stale DOM nodes.
+ * Adaptive design: Automatically detects the environment (Standalone Agent App vs. Classic IDE)
+ * and resolves selectors accordingly to ensure absolute resilience.
  */
 
 const UI_LOCATORS_SCRIPT = `
     var AG_UI = {
         /**
+         * Detects if the current environment is the classic VSCode-based IDE
+         * vs the modern Standalone Agent Application.
+         * @returns {boolean}
+         */
+        isClassicIDE: () => {
+            return !!(document.querySelector('.monaco-workbench') || document.querySelector('[class*="monaco-"]'));
+        },
+
+        /**
          * Retrieves the currently active and visible chat container.
-         * 
-         * Strategy: Anchor from the active chat input element (which the IDE
-         * always places inside the currently focused conversation) and walk
-         * up the DOM tree to the nearest #conversation ancestor. This
-         * guarantees we never accidentally select a stale or background
-         * thread that the IDE keeps mounted in the DOM.
-         * 
-         * Fallback: If the input-based approach fails (e.g. input not yet
-         * rendered), we fall back to querying all candidate containers and
-         * selecting the first one whose entire ancestor chain is visible
-         * (no display:none parents).
-         * 
          * @returns {HTMLElement|null} The active conversation element
          */
         getVisibleChatContainer: () => {
@@ -34,15 +30,28 @@ const UI_LOCATORS_SCRIPT = `
             if (input) {
                 let el = input;
                 while (el) {
-                    if (el.id === 'conversation' || el.classList.contains('interactive-session')) {
+                    if (el.id === 'conversation' || 
+                        el.classList.contains('interactive-session') || 
+                        el.classList.contains('chat-container') ||
+                        el.tagName === 'MAIN') {
                         return el;
                     }
                     el = el.parentElement;
                 }
             }
 
-            // --- Fallback: query all candidates and pick the first visible one ---
-            const containers = Array.from(document.querySelectorAll('#conversation, .flex.w-full.grow.flex-col.overflow-hidden, #chat, .interactive-session'));
+            // --- Fallback: query all candidate containers and pick the first visible one ---
+            const candidates = [
+                '#conversation', 
+                '.interactive-session',
+                '.chat-container',
+                '#chat',
+                '.flex.w-full.grow.flex-col.overflow-hidden',
+                'main',
+                'body'
+            ];
+            
+            const containers = Array.from(document.querySelectorAll(candidates.join(', ')));
             return containers.find(c => {
                 let isVisible = true;
                 let el = c;
@@ -58,13 +67,40 @@ const UI_LOCATORS_SCRIPT = `
         },
 
         /**
-         * Retrieves the main text area editor used to insert prompts.
+         * Retrieves the main text area/input used to insert prompts.
          * Excludes xterm inputs to avoid typing into the terminal.
          * @returns {HTMLTextAreaElement|HTMLElement|null} The active editor
          */
         getChatInput: () => {
-            const editors = [...document.querySelectorAll('.interactive-input-editor textarea, #conversation textarea, #chat textarea, .chat-input textarea, [aria-label*="chat input" i] textarea, [contenteditable="true"]')]
-                .filter(el => !el.className.includes('xterm') && el.offsetParent !== null && window.getComputedStyle(el).display !== 'none');
+            const isClassic = AG_UI.isClassicIDE();
+            
+            // Candidate selectors for inputs and editable elements
+            const candidates = [
+                '.interactive-input-editor textarea',
+                '#conversation textarea',
+                '#chat textarea',
+                '.chat-input textarea',
+                '.chat-input [contenteditable="true"]',
+                '[aria-label*="chat input" i] textarea',
+                '[aria-label*="chat input" i] [contenteditable="true"]',
+                '[placeholder*="Ask" i] textarea',
+                '[placeholder*="Ask" i] [contenteditable="true"]',
+                '[placeholder*="Sohbet" i] textarea',
+                '[placeholder*="Sohbet" i] [contenteditable="true"]',
+                'textarea',
+                '[contenteditable="true"]'
+            ];
+
+            const editors = [...document.querySelectorAll(candidates.join(', '))]
+                .filter(el => {
+                    // Filter out xterm, hidden elements, or display none
+                    if (el.className && typeof el.className === 'string' && el.className.includes('xterm')) return false;
+                    if (el.offsetParent === null) return false;
+                    if (window.getComputedStyle(el).display === 'none') return false;
+                    return true;
+                });
+
+            // Return the most relevant editor (preferring the last active one)
             return editors.at(-1) || null;
         },
 
@@ -74,13 +110,22 @@ const UI_LOCATORS_SCRIPT = `
          */
         getStopButton: () => {
             const chatArea = AG_UI.getVisibleChatContainer() || document;
-            const stopIcon = chatArea.querySelector("svg.lucide-square, [data-tooltip-id*='cancel'], [aria-label*='Stop'], [title*='Stop'], [aria-label*='Cancel']");
+            
+            // Search by common stop/cancel icons and attributes
+            const stopIcon = chatArea.querySelector(
+                "svg.lucide-square, [data-tooltip-id*='cancel'], [aria-label*='Stop'], [title*='Stop'], [aria-label*='Cancel'], [aria-label*='Durdur'], [title*='Durdur']"
+            );
             if (stopIcon) return stopIcon.closest('button') || stopIcon;
             
+            // Secondary strategy: find any button containing a square shape or 'stop' text
             const allBtns = Array.from(chatArea.querySelectorAll('button'));
             return allBtns.find(b => {
                 const svg = b.querySelector('svg');
-                return svg && (svg.classList.contains('lucide-square') || b.innerHTML.includes('square'));
+                const text = (b.textContent || '').toLowerCase();
+                return (svg && (svg.classList.contains('lucide-square') || b.innerHTML.includes('square'))) ||
+                       text.includes('stop') || 
+                       text.includes('cancel') || 
+                       text.includes('durdur');
             }) || null;
         },
 
@@ -90,11 +135,25 @@ const UI_LOCATORS_SCRIPT = `
          * @returns {boolean} True if generating/loading
          */
         isLoading: () => {
-            return Array.from(document.querySelectorAll('.codicon-loading, .loading, [class*="animate-spin"], [class*="spinner"], [class*="loader"]')).some(el => {
+            const selectors = [
+                '.codicon-loading', 
+                '.loading', 
+                '[class*="animate-spin"]', 
+                '[class*="spinner"]', 
+                '[class*="loader"]',
+                '.thinking-indicator'
+            ];
+            
+            return Array.from(document.querySelectorAll(selectors.join(', '))).some(el => {
                 if (el.offsetParent === null) return false;
-                if (el.className.includes('h-3') && el.className.includes('w-3')) return false;
+                // Ignore tiny status bar indicators
+                if (el.className && typeof el.className === 'string') {
+                    if (el.className.includes('h-3') && el.className.includes('w-3')) return false;
+                }
                 const parent = el.parentElement;
-                if (parent && (parent.className.includes('opacity-') || parent.className.includes('hidden'))) return false;
+                if (parent && parent.className && typeof parent.className === 'string') {
+                    if (parent.className.includes('opacity-') || parent.className.includes('hidden')) return false;
+                }
                 return true;
             });
         },
@@ -109,7 +168,19 @@ const UI_LOCATORS_SCRIPT = `
                 const btn = svgPath.closest('button, a, [role="button"]');
                 if (btn) return btn;
             }
-            return document.querySelector('[aria-label*="New Chat" i], [title*="New Chat" i], [aria-label*="Yeni Sohbet" i], [class*="new-chat"], [aria-label*="New Task" i], [title*="New Task" i], [data-tooltip-id*="new-conversation" i]') || null;
+            
+            // Universal label query for new conversation trigger
+            const selectors = [
+                '[aria-label*="New Chat" i]',
+                '[title*="New Chat" i]',
+                '[aria-label*="Yeni Sohbet" i]',
+                '[title*="Yeni Sohbet" i]',
+                '[class*="new-chat"]',
+                '[aria-label*="New Task" i]',
+                '[title*="New Task" i]',
+                '[data-tooltip-id*="new-conversation" i]'
+            ];
+            return document.querySelector(selectors.join(', ')) || null;
         },
 
         /**
@@ -125,11 +196,8 @@ const UI_LOCATORS_SCRIPT = `
          * @returns {HTMLElement[]}
          */
         getModelOptions: () => {
-            // Model dropdown items are plain buttons with a specific layout class.
-            // They contain model names like "Gemini 3.1 Pro (High)", "Claude Opus 4.6 (Thinking)", etc.
             const modelKeywords = ['gemini', 'claude', 'gpt', 'opus', 'sonnet', 'flash'];
-            const candidates = Array.from(document.querySelectorAll('button.px-2.py-1, [role="option"], [role="menuitemradio"]'));
-            // Filter to only those containing model-related text
+            const candidates = Array.from(document.querySelectorAll('button.px-2.py-1, [role="option"], [role="menuitemradio"], .model-option'));
             return candidates.filter(el => {
                 const text = (el.textContent || '').toLowerCase();
                 return modelKeywords.some(k => text.includes(k));
@@ -141,7 +209,7 @@ const UI_LOCATORS_SCRIPT = `
          * @returns {HTMLElement[]}
          */
         getWorkspaceCards: () => {
-            return Array.from(document.querySelectorAll('div[data-workspace-card="true"]'));
+            return Array.from(document.querySelectorAll('div[data-workspace-card="true"], .workspace-card'));
         },
 
         /**
@@ -150,12 +218,11 @@ const UI_LOCATORS_SCRIPT = `
          * @returns {HTMLElement[]}
          */
         getChatThreadPills: (container = document) => {
-            return Array.from(container.querySelectorAll('[data-testid^="convo-pill-"]'));
+            return Array.from(container.querySelectorAll('[data-testid^="convo-pill-"], .convo-pill, [class*="conversation-pill"]'));
         },
         
         /**
          * Removes "Thought for Xs" blocks from a cloned DOM element.
-         * Useful for message extraction to prevent fetching internal logic.
          * @param {HTMLElement} clone The cloned message node
          */
         removeThoughtBlocks: (clone) => {
@@ -163,6 +230,9 @@ const UI_LOCATORS_SCRIPT = `
             btns.forEach(btn => {
                 if (btn.parentElement) btn.parentElement.remove();
             });
+            // Support modern 2.0 thought/thinking blocks
+            const modernThoughts = Array.from(clone.querySelectorAll('.thought-block, [class*="thought-"], details.thought'));
+            modernThoughts.forEach(el => el.remove());
         }
     };
 `;

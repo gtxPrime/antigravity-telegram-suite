@@ -15,6 +15,8 @@ Thumbs.db
 
 # Debug/scratch files
 core
+test_cdp.js
+install_standalone.sh
 check_dom*.js
 find_buttons.js
 patch.js
@@ -27,15 +29,15 @@ npm-debug.log*
 # PM2
 ecosystem.config.js
 
-# MindSync
-v3_integration_plan.md
-.mindsync/
+# Local agent documentation
+agent_work/
 
-# AI Rules & Local Context
-.cursorrules
-.windsurfrules
 CLAUDE.md
 GEMINI.md
-.gemini/
-.cursor/
 
+# AI Editor configs (local only)
+.cursor/
+.gemini/
+.mindsync/
+.cursorrules
+.windsurfrules
