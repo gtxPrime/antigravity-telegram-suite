@@ -272,7 +272,7 @@ function clearWindowState(app = getPreferredApp()) {
     
     // Clear backupWorkspaces from the CORRECT storage.json location
     // (User/globalStorage/storage.json — NOT the root-level one which doesn't exist)
-    clearBackupWorkspaces(app);
+    // clearBackupWorkspaces(app);
 }
 
 /**
