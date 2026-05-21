@@ -266,16 +266,10 @@ function cleanLockFile(app = getPreferredApp()) {
  * @param {string} [app=PREFERRED_APP] - 'agent' or 'ide'
  */
 function clearWindowState(app = getPreferredApp()) {
-    const fs = require('fs');
-    const backupsDir = path.join(getAppDataDir(app), 'Backups');
-    try {
-        if (fs.existsSync(backupsDir)) {
-            fs.rmSync(backupsDir, { recursive: true, force: true });
-            console.log(`[platform] Cleared Backups for ${app}`);
-        }
-    } catch (e) {
-        console.error(`[platform] Failed to clear Backups for ${app}:`, e.message);
-    }
+    // We intentionally DO NOT delete the Backups directory here anymore.
+    // Deleting Backups wipes the hot exit state, which includes the active AI chat session UUID.
+    // This was causing 'her yeni başlatmaya eski sohbet geçmişi yok oluyor' (old chat history disappearing on restart).
+    
     // Clear backupWorkspaces from the CORRECT storage.json location
     // (User/globalStorage/storage.json — NOT the root-level one which doesn't exist)
     clearBackupWorkspaces(app);

@@ -610,12 +610,12 @@ bot.command('ask', (ctx) => {
     
     (async () => {
         try {
-            await sendViaCDP(query, CDP_PORT);
+            const targetId = await sendViaCDP(query, CDP_PORT);
             await ctx.reply(t('ask.sent'));
 
             // Wait briefly for message to render in DOM before anchoring state
             await new Promise(r => setTimeout(r, 1500));
-            await snapshotChatState(CDP_PORT).catch(() => {});
+            await snapshotChatState(CDP_PORT, targetId).catch(() => {});
             
             const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx));
             if (isDone) {
@@ -701,6 +701,8 @@ bot.command('agents', async (ctx) => {
             } else {
                 setPreferredWindow(null);
                 if (thread.workspace) setActiveWorkspace(thread.workspace);
+                // Update lastResolvedThreadId so /latest reads from this thread
+                await snapshotChatState(CDP_PORT, success).catch(() => {});
                 await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`);
             }
         } else {
@@ -760,6 +762,8 @@ bot.hears(/^\/agents_(\d+)$/, async (ctx) => {
             if (thread.workspace) {
                 setActiveWorkspace(thread.workspace);
             }
+            // Update lastResolvedThreadId so /latest reads from this thread
+            await snapshotChatState(CDP_PORT, targetId).catch(() => {});
             // Menüyü yenile — buton yeni ajan ismini göstersin
             await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`);
         }
@@ -1948,7 +1952,7 @@ bot.on('text', (ctx) => {
 
                 // Wait briefly for message to render in DOM before anchoring state
                 await new Promise(r => setTimeout(r, 1500));
-                await snapshotChatState(CDP_PORT).catch(() => {});
+                await snapshotChatState(CDP_PORT, targetId).catch(() => {});
                 
                 const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx), targetId);
                 if (isDone) {
@@ -2031,7 +2035,7 @@ bot.on(['photo', 'document'], (ctx) => {
 
             // Wait briefly for message to render in DOM before anchoring state
             await new Promise(r => setTimeout(r, 1500));
-            await snapshotChatState(CDP_PORT).catch(() => {});
+            await snapshotChatState(CDP_PORT, targetId).catch(() => {});
             
             const isDone = await waitForAgentResponse(CDP_PORT, 450000, createProgressHandler(ctx), targetId);
             if (isDone) {

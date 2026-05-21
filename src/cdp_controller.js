@@ -10,6 +10,11 @@ const os = require('os');
 let preferredTargetId = null;
 let windowCache = [];
 
+// Track the last successfully resolved conversation UUID.
+// Set by snapshotChatState after a message is sent, used by getFullLatestResponse
+// so /latest doesn't have to guess which thread to read from.
+let lastResolvedThreadId = null;
+
 /**
  * Shared target resolver — fetches CDP targets, filters, and sorts.
  * If a preferred window is set, that window is prioritised.
@@ -376,9 +381,13 @@ async function snapshotChatState(port, specificTargetId = null) {
         const activeId = await getActiveThreadId(port, specificTargetId || preferredTargetId);
         if (!activeId) return;
         const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
-        const logPath = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
-        if (!fs.existsSync(logPath)) return;
+        const logsDir = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs');
+        const hasLogs = fs.existsSync(path.join(logsDir, 'overview.txt')) || fs.existsSync(path.join(logsDir, 'transcript.jsonl'));
+        if (!hasLogs) return;
         
+        // Persist the resolved thread ID so /latest can use it directly
+        // instead of re-guessing which window/thread is active
+        lastResolvedThreadId = activeId;
         console.log(`[snapshot] Anchored file-based thread: ${activeId}`);
         return;
     } catch (e) {
@@ -468,29 +477,50 @@ async function getFullLatestResponse(port, specificTargetId = null, threadName =
     
     // --- Primary: file-system extraction from the active thread's log ---
     try {
-        const activeId = findConversationIdByTitle(threadName) || await getActiveThreadId(port, targetIdToUse);
+        // Priority: explicit threadName > last snapshot (most reliable) > dynamic resolution
+        const activeId = findConversationIdByTitle(threadName) || (targetIdToUse ? null : lastResolvedThreadId) || await getActiveThreadId(port, targetIdToUse);
         if (activeId) {
             const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
-            const logPath = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs', 'overview.txt');
-            if (fs.existsSync(logPath)) {
-                // Read the entire file because chunks can break JSON parsing of large messages
+            const logsDir = path.join(os.homedir(), '.gemini', appDataName, 'brain', activeId, '.system_generated', 'logs');
+            const overviewPath = path.join(logsDir, 'overview.txt');
+            const transcriptPath = path.join(logsDir, 'transcript.jsonl');
+            
+            // Try transcript.jsonl first (new IDE format), then overview.txt (legacy)
+            const logPath = fs.existsSync(transcriptPath) ? transcriptPath : (fs.existsSync(overviewPath) ? overviewPath : null);
+            const isTranscript = logPath === transcriptPath;
+            
+            if (logPath) {
                 const content = fs.readFileSync(logPath, 'utf8');
-                
-                // Parse JSON lines to find the last user message + model content response
                 const lines = content.split('\n').filter(l => l.trim());
                 let lastUserMsg = null;
                 let lastModelMsg = null;
                 
+                // For transcript.jsonl, the format uses 'type' and 'source' differently:
+                // - USER messages: source=USER_EXPLICIT, type=USER_INPUT
+                // - MODEL responses: source=MODEL, type=PLANNER_RESPONSE (the final text response)
+                // We skip non-content entries like VIEW_FILE, RUN_COMMAND, etc.
                 for (let i = lines.length - 1; i >= 0; i--) {
                     try {
                         const entry = JSON.parse(lines[i]);
-                        if (!lastModelMsg && entry.source === 'MODEL' && entry.content && entry.content.trim()) {
-                            lastModelMsg = entry.content;
-                        }
-                        if (lastModelMsg && !lastUserMsg && entry.source === 'USER_EXPLICIT' && entry.content) {
-                            // Extract just the user request from the XML wrapper
-                            const reqMatch = entry.content.match(/<USER_REQUEST>\n?([\s\S]*?)\n?<\/USER_REQUEST>/);
-                            lastUserMsg = reqMatch ? reqMatch[1].trim() : entry.content.substring(0, 200);
+                        
+                        if (isTranscript) {
+                            // transcript.jsonl format: look for PLANNER_RESPONSE as the model's text answer
+                            if (!lastModelMsg && entry.source === 'MODEL' && entry.type === 'PLANNER_RESPONSE' && entry.content && entry.content.trim()) {
+                                lastModelMsg = entry.content;
+                            }
+                            if (lastModelMsg && !lastUserMsg && entry.source === 'USER_EXPLICIT' && entry.content) {
+                                const reqMatch = entry.content.match(/<USER_REQUEST>\n?([\s\S]*?)\n?<\/USER_REQUEST>/);
+                                lastUserMsg = reqMatch ? reqMatch[1].trim() : entry.content.substring(0, 200);
+                            }
+                        } else {
+                            // overview.txt format (legacy)
+                            if (!lastModelMsg && entry.source === 'MODEL' && entry.content && entry.content.trim()) {
+                                lastModelMsg = entry.content;
+                            }
+                            if (lastModelMsg && !lastUserMsg && entry.source === 'USER_EXPLICIT' && entry.content) {
+                                const reqMatch = entry.content.match(/<USER_REQUEST>\n?([\s\S]*?)\n?<\/USER_REQUEST>/);
+                                lastUserMsg = reqMatch ? reqMatch[1].trim() : entry.content.substring(0, 200);
+                            }
                         }
                         if (lastUserMsg && lastModelMsg) break;
                     } catch (_) {}
@@ -505,6 +535,7 @@ async function getFullLatestResponse(port, specificTargetId = null, threadName =
                         // Truncate very long model responses for Telegram
                         const truncated = lastModelMsg.length > 3000 ? lastModelMsg.substring(0, 3000) + '\n\n[...truncated]' : lastModelMsg;
                         parts.push('🤖 Agent:\n' + truncated);
+                        console.log(`[getFullLatestResponse] Read from ${isTranscript ? 'transcript.jsonl' : 'overview.txt'} for thread ${activeId.substring(0, 8)}`);
                         return parts.join('\n\n');
                     }
                 }
@@ -1204,11 +1235,13 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                 expression: `
                     (() => {
                         let name = null;
+                        let nameSource = 'none';
                         
                         // Try to find the title next to the history icon
                         const titleEl = document.querySelector("svg.lucide-history")?.closest("div")?.parentElement?.querySelector("div.whitespace-nowrap");
                         if (titleEl) {
                             name = titleEl.textContent.trim();
+                            nameSource = 'history-icon';
                         } else {
                             // Fallback for older UI
                             const all = document.querySelectorAll('[data-testid^="convo-pill-"]');
@@ -1216,12 +1249,19 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                                 const row = el.closest('[role="button"]');
                                 if (row && row.classList.contains('bg-list-hover')) {
                                     name = el.textContent.trim();
+                                    nameSource = 'convo-pill';
                                     break;
                                 }
                             }
-                            // Standalone 2.0 fallback
+                            // Standalone 2.0 fallback — only use document.title if it's NOT an IDE window title
+                            // IDE titles look like "project - Antigravity IDE - file.js" which is NOT a thread name
                             if (!name) {
-                                name = document.title;
+                                const title = document.title;
+                                const isIDETitle = title && (title.includes(' - Antigravity IDE') || title.includes(' - Antigravity -'));
+                                if (!isIDETitle && title) {
+                                    name = title;
+                                    nameSource = 'document-title';
+                                }
                             }
                         }
                         let workspace = null;
@@ -1246,7 +1286,7 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                                 }
                             }
                         }
-                        return { name, workspace, threadId: threadIdVal };
+                        return { name, workspace, threadId: threadIdVal, nameSource };
                     })()
                 `,
                 returnByValue: true
@@ -1261,7 +1301,10 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                 if (wsName && wsName.includes(' - ')) wsName = wsName.split(' - ')[0].trim();
                 if (wsName && wsName !== 'undefined' && wsName !== 'Launchpad') workspaceName = wsName;
                 
-                if (threadName) break;
+                // Only break if we got a REAL thread name (not just workspace/title fallback)
+                // If threadId was found directly from DOM, that's authoritative — break immediately
+                if (threadId) break;
+                if (threadName && res.result.value.nameSource !== 'document-title') break;
             }
         } catch(e) { console.debug(`[getActiveThreadInfo] target error: ${e.message}`); }
     }
@@ -1271,6 +1314,7 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
     }
 
     // 2. Fallback: Get Thread ID via file-system logs of the app
+    // New IDE uses transcript.jsonl, legacy used overview.txt — check both
     if (!threadId) {
         try {
             const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
@@ -1281,13 +1325,21 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
                 
                 for (const dir of dirs) {
                     if (!dir.isDirectory()) continue;
-                    const logPath = path.join(brainPath, dir.name, '.system_generated', 'logs', 'overview.txt');
-                    if (fs.existsSync(logPath)) {
-                        const stats = fs.statSync(logPath);
-                        if (stats.mtimeMs > latestTime) {
-                            latestTime = stats.mtimeMs;
-                            threadId = dir.name;
-                        }
+                    const logsDir = path.join(brainPath, dir.name, '.system_generated', 'logs');
+                    
+                    // Check both log files — prefer the one with the latest mtime
+                    let bestMtime = 0;
+                    for (const logFile of ['transcript.jsonl', 'overview.txt']) {
+                        const logPath = path.join(logsDir, logFile);
+                        try {
+                            const stats = fs.statSync(logPath);
+                            if (stats.mtimeMs > bestMtime) bestMtime = stats.mtimeMs;
+                        } catch (_) {}
+                    }
+                    
+                    if (bestMtime > latestTime) {
+                        latestTime = bestMtime;
+                        threadId = dir.name;
                     }
                 }
             }
