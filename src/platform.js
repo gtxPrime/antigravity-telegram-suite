@@ -115,11 +115,36 @@ function getAppBinary(app = getPreferredApp()) {
  * @param {string} app - 'agent' or 'ide'
  */
 function getAppDataDir(app = getPreferredApp()) {
-    const suffix = app === 'ide' ? 'Antigravity-IDE' : 'Antigravity';
-    switch (PLATFORM) {
-        case 'darwin': return path.join(HOME, 'Library', 'Application Support', suffix);
-        case 'win32': return path.join(process.env.APPDATA || '', suffix);
-        default: return path.join(HOME, '.config', suffix);
+    const fs = require('fs');
+    if (app === 'ide') {
+        // Post-update IDE uses 'Antigravity IDE' (with space) instead of 'Antigravity-IDE' (hyphenated).
+        // Auto-detect which directory the IDE is actually using.
+        switch (PLATFORM) {
+            case 'darwin': {
+                const newDir = path.join(HOME, 'Library', 'Application Support', 'Antigravity IDE');
+                const oldDir = path.join(HOME, 'Library', 'Application Support', 'Antigravity-IDE');
+                return fs.existsSync(newDir) ? newDir : oldDir;
+            }
+            case 'win32': {
+                const base = process.env.APPDATA || '';
+                const newDir = path.join(base, 'Antigravity IDE');
+                const oldDir = path.join(base, 'Antigravity-IDE');
+                return fs.existsSync(newDir) ? newDir : oldDir;
+            }
+            default: { // linux
+                const newDir = path.join(HOME, '.config', 'Antigravity IDE');
+                const oldDir = path.join(HOME, '.config', 'Antigravity-IDE');
+                return fs.existsSync(newDir) ? newDir : oldDir;
+            }
+        }
+    } else {
+        // Standalone Agent — directory name unchanged
+        const suffix = 'Antigravity';
+        switch (PLATFORM) {
+            case 'darwin': return path.join(HOME, 'Library', 'Application Support', suffix);
+            case 'win32': return path.join(process.env.APPDATA || '', suffix);
+            default: return path.join(HOME, '.config', suffix);
+        }
     }
 }
 
@@ -215,7 +240,7 @@ function killIDE(app = getPreferredApp()) {
                     `pkill -9 -f "chrome_crashpad_handler" 2>/dev/null`,
                     `pkill -9 -f "chrome-sandbox" 2>/dev/null`,
                     `pkill -9 -f "language_server_linux" 2>/dev/null`,
-                    `pkill -9 -f "user-data-dir.*${app === 'ide' ? 'Antigravity-IDE' : 'Antigravity'}" 2>/dev/null`,
+                    `pkill -9 -f "user-data-dir.*${app === 'ide' ? 'Antigravity.IDE' : 'Antigravity'}" 2>/dev/null`,
                     `sleep 1`,
                     // Ensure the debugging port is freed
                     `fuser -k 9333/tcp 2>/dev/null || true`

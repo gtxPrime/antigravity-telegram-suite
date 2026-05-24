@@ -1380,9 +1380,65 @@ bot.action(/pref_app_(.+)/, async (ctx) => {
 bot.command('fix_shortcuts', async (ctx) => {
     ctx.reply(t('shortcuts.scanning'));
     
-    // Create a safe, temporary PowerShell script on disk and run it
-    const psScriptPath = path.join(os.tmpdir(), 'fix_shortcuts.ps1');
-    const psScript = `
+    const platform = require('./platform').PLATFORM;
+    const { getAppBinary } = require('./platform');
+    
+    if (platform === 'linux') {
+        // Linux: Update launcher scripts and .desktop files
+        try {
+            const localBin = path.join(os.homedir(), '.local', 'bin');
+            const desktop = path.join(os.homedir(), 'Desktop');
+            let fixedCount = 0;
+            let status = t('shortcuts.updated_header') || 'Kısayollar güncellendi:\n';
+
+            // Ensure directories exist
+            if (!fs.existsSync(localBin)) fs.mkdirSync(localBin, { recursive: true });
+
+            // --- 1. IDE Launcher (Port 9334) ---
+            const ideBinary = getAppBinary('ide');
+            const ideLauncherPath = path.join(localBin, 'antigravity-ide-launcher.sh');
+            const ideDesktopPath = path.join(desktop, 'Antigravity-IDE-CDP.desktop');
+            
+            if (fs.existsSync(ideBinary) || fs.existsSync(require('fs').realpathSync(ideBinary).replace(/\/[^/]+$/, ''))) {
+                const ideLauncher = `#!/bin/bash\n# Antigravity IDE Launcher — Port 9334\nPORT=9334\nAPP_PATH="${ideBinary}"\n\ncleanup_port() {\n    local pids\n    pids=$(lsof -t -i :"$PORT" 2>/dev/null || true)\n    if [ -n "$pids" ]; then\n        echo "[launcher-ide] Port $PORT temizleniyor: $pids"\n        echo "$pids" | xargs kill -9 2>/dev/null || true\n        sleep 0.5\n    fi\n    rm -f "$HOME/.config/Antigravity IDE/code.lock"\n    rm -f "$HOME/.config/Antigravity-IDE/code.lock"\n}\n\ncleanup_port\n$APP_PATH --remote-debugging-port=$PORT "$@" &\nAG_PID=$!\nwait $AG_PID\ncleanup_port\n`;
+                fs.writeFileSync(ideLauncherPath, ideLauncher, { mode: 0o755 });
+
+                const ideDesktop = `[Desktop Entry]\nName=Antigravity IDE (CDP 9334)\nComment=Start Antigravity IDE with CDP 9334\nExec=${ideLauncherPath} %F\nIcon=antigravity-ide\nType=Application\nTerminal=false\nStartupNotify=false\nStartupWMClass=antigravity-ide\nCategories=Development;IDE;\nMimeType=application/x-antigravity-workspace;\n`;
+                fs.writeFileSync(ideDesktopPath, ideDesktop);
+                exec(`chmod +x "${ideDesktopPath}"`);
+                status += `• 💻 <b>Antigravity IDE</b> -> <code>--remote-debugging-port=9334</code> ✅\n`;
+                fixedCount++;
+            } else {
+                status += `• 💻 <i>Antigravity IDE</i> (${t('shortcuts.binary_not_found') || 'binary bulunamadı'})\n`;
+            }
+
+            // --- 2. Standalone Agent (Port 9333) ---
+            const agentBinary = getAppBinary('agent');
+            const agentLauncherPath = path.join(localBin, 'antigravity-standalone-launcher.sh');
+            const agentDesktopPath = path.join(desktop, 'Antigravity-Standalone-CDP.desktop');
+            
+            if (fs.existsSync(agentBinary)) {
+                const agentLauncher = `#!/bin/bash\n# Antigravity Standalone Launcher — Port 9333\nPORT=9333\nAPP_PATH="${agentBinary}"\n\ncleanup_port() {\n    local pids\n    pids=$(lsof -t -i :"$PORT" 2>/dev/null || true)\n    if [ -n "$pids" ]; then\n        echo "[launcher-standalone] Port $PORT temizleniyor: $pids"\n        echo "$pids" | xargs kill -9 2>/dev/null || true\n        sleep 0.5\n    fi\n    rm -f "$HOME/.config/Antigravity/code.lock"\n}\n\ncleanup_port\n$APP_PATH --remote-debugging-port=$PORT "$@" &\nAG_PID=$!\nwait $AG_PID\ncleanup_port\n`;
+                fs.writeFileSync(agentLauncherPath, agentLauncher, { mode: 0o755 });
+
+                const agentDesktop = `[Desktop Entry]\nName=Antigravity Standalone (CDP 9333)\nComment=Start Antigravity Standalone Agent with CDP 9333\nExec=${agentLauncherPath} %F\nIcon=antigravity-standalone\nType=Application\nTerminal=false\nStartupNotify=false\nStartupWMClass=antigravity\nCategories=Development;IDE;\nMimeType=application/x-antigravity-workspace;\n`;
+                fs.writeFileSync(agentDesktopPath, agentDesktop);
+                exec(`chmod +x "${agentDesktopPath}"`);
+                status += `• 🤖 <b>Antigravity Standalone</b> -> <code>--remote-debugging-port=9333</code> ✅\n`;
+                fixedCount++;
+            } else {
+                status += `• 🤖 <i>Antigravity Standalone</i> (${t('shortcuts.binary_not_found') || 'binary bulunamadı'})\n`;
+            }
+
+            status += t('shortcuts.success', { count: fixedCount });
+            ctx.reply(status, { parse_mode: 'HTML' });
+        } catch (e) {
+            ctx.reply(t('shortcuts.start_error', { error: e.message }));
+        }
+    } else if (platform === 'win32') {
+        // Windows: PowerShell approach
+        const psScriptPath = path.join(os.tmpdir(), 'fix_shortcuts.ps1');
+        const psScript = `
 $sh = New-Object -ComObject WScript.Shell
 $desktop = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop")
 
@@ -1405,38 +1461,40 @@ if (Test-Path $lnkIDE) {
 }
 `;
 
-    try {
-        fs.writeFileSync(psScriptPath, psScript, 'utf8');
-        exec(`powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`, (err, stdout, stderr) => {
-            // Clean up temporary script
-            try { fs.unlinkSync(psScriptPath); } catch (_) {}
-            
-            if (err) {
-                console.error('[fix_shortcuts] Error:', err);
-                return ctx.reply(t('shortcuts.error', { error: err.message }), { parse_mode: 'HTML' });
-            }
-            
-            let status = 'Kısayollar güncellendi:\n';
-            const output = stdout.toLowerCase();
-            let fixedCount = 0;
-            if (output.includes('agent-fixed')) {
-                status += '• 🤖 <b>Antigravity.lnk</b> -> <code>--remote-debugging-port=9333</code> olarak güncellendi!\n';
-                fixedCount++;
-            } else {
-                status += '• 🤖 <i>Antigravity.lnk</i> (' + t('shortcuts.not_found') + ')\n';
-            }
-            if (output.includes('ide-fixed')) {
-                status += '• 💻 <b>Antigravity IDE.lnk</b> -> <code>--remote-debugging-port=9334</code> olarak güncellendi!\n';
-                fixedCount++;
-            } else {
-                status += '• 💻 <i>Antigravity IDE.lnk</i> (' + t('shortcuts.not_found') + ')\n';
-            }
-            
-            status += t('shortcuts.success', { count: fixedCount });
-            ctx.reply(status, { parse_mode: 'HTML' });
-        });
-    } catch (e) {
-        ctx.reply(t('shortcuts.start_error', { error: e.message }));
+        try {
+            fs.writeFileSync(psScriptPath, psScript, 'utf8');
+            exec(`powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`, (err, stdout, stderr) => {
+                try { fs.unlinkSync(psScriptPath); } catch (_) {}
+                
+                if (err) {
+                    console.error('[fix_shortcuts] Error:', err);
+                    return ctx.reply(t('shortcuts.error', { error: err.message }), { parse_mode: 'HTML' });
+                }
+                
+                let status = 'Kısayollar güncellendi:\n';
+                const output = stdout.toLowerCase();
+                let fixedCount = 0;
+                if (output.includes('agent-fixed')) {
+                    status += '\u2022 \ud83e\udd16 <b>Antigravity.lnk</b> -> <code>--remote-debugging-port=9333</code> \u2705\n';
+                    fixedCount++;
+                } else {
+                    status += '\u2022 \ud83e\udd16 <i>Antigravity.lnk</i> (' + t('shortcuts.not_found') + ')\n';
+                }
+                if (output.includes('ide-fixed')) {
+                    status += '\u2022 \ud83d\udcbb <b>Antigravity IDE.lnk</b> -> <code>--remote-debugging-port=9334</code> \u2705\n';
+                    fixedCount++;
+                } else {
+                    status += '\u2022 \ud83d\udcbb <i>Antigravity IDE.lnk</i> (' + t('shortcuts.not_found') + ')\n';
+                }
+                
+                status += t('shortcuts.success', { count: fixedCount });
+                ctx.reply(status, { parse_mode: 'HTML' });
+            });
+        } catch (e) {
+            ctx.reply(t('shortcuts.start_error', { error: e.message }));
+        }
+    } else {
+        ctx.reply(t('shortcuts.unsupported_platform') || '\u26a0\ufe0f Bu platform i\u00e7in k\u0131sayol d\u00fczeltme hen\u00fcz desteklenmiyor.');
     }
 });
 

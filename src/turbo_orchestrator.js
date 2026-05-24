@@ -103,6 +103,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         
         let fixText = "N/A";
         const hasIssues = reviewText.includes("ISSUES_FOUND: true");
+        let sentTargetId4 = null;
 
         if (hasIssues) {
             // --- PHASE 4: FIX (Gemini) ---
@@ -123,7 +124,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
             const fixPrompt = `You are the Lead Developer. The Security Auditor found issues in the previous implementation. Please fix all the issues mentioned by the Auditor.`;
             
-            const sentTargetId4 = await sendViaCDP(fixPrompt, CDP_PORT, sentTargetId3);
+            sentTargetId4 = await sendViaCDP(fixPrompt, CDP_PORT, sentTargetId3);
             await new Promise(r => setTimeout(r, 2000));
             await snapshotChatState(CDP_PORT, sentTargetId3).catch(() => {});
             
