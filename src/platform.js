@@ -117,26 +117,46 @@ function getAppBinary(app = getPreferredApp()) {
 function getAppDataDir(app = getPreferredApp()) {
     const fs = require('fs');
     if (app === 'ide') {
-        // Post-update IDE uses 'Antigravity IDE' (with space) instead of 'Antigravity-IDE' (hyphenated).
-        // Auto-detect which directory the IDE is actually using.
+        const candidates = [];
         switch (PLATFORM) {
-            case 'darwin': {
-                const newDir = path.join(HOME, 'Library', 'Application Support', 'Antigravity IDE');
-                const oldDir = path.join(HOME, 'Library', 'Application Support', 'Antigravity-IDE');
-                return fs.existsSync(newDir) ? newDir : oldDir;
-            }
-            case 'win32': {
+            case 'darwin':
+                candidates.push(path.join(HOME, 'Library', 'Application Support', 'Antigravity IDE'));
+                candidates.push(path.join(HOME, 'Library', 'Application Support', 'Antigravity-IDE'));
+                candidates.push(path.join(HOME, 'Library', 'Application Support', 'antigravity-ide'));
+                break;
+            case 'win32':
                 const base = process.env.APPDATA || '';
-                const newDir = path.join(base, 'Antigravity IDE');
-                const oldDir = path.join(base, 'Antigravity-IDE');
-                return fs.existsSync(newDir) ? newDir : oldDir;
-            }
-            default: { // linux
-                const newDir = path.join(HOME, '.config', 'Antigravity IDE');
-                const oldDir = path.join(HOME, '.config', 'Antigravity-IDE');
-                return fs.existsSync(newDir) ? newDir : oldDir;
+                candidates.push(path.join(base, 'Antigravity IDE'));
+                candidates.push(path.join(base, 'Antigravity-IDE'));
+                candidates.push(path.join(base, 'antigravity-ide'));
+                break;
+            default:
+                candidates.push(path.join(HOME, '.config', 'Antigravity IDE'));
+                candidates.push(path.join(HOME, '.config', 'Antigravity-IDE'));
+                candidates.push(path.join(HOME, '.config', 'antigravity-ide'));
+                break;
+        }
+
+        let activeDir = candidates[0];
+        let maxTime = 0;
+
+        for (const dir of candidates) {
+            if (!fs.existsSync(dir)) continue;
+            const vscdbPath = path.join(dir, 'User', 'globalStorage', 'state.vscdb');
+            if (fs.existsSync(vscdbPath)) {
+                const stat = fs.statSync(vscdbPath);
+                if (stat.mtimeMs > maxTime) {
+                    maxTime = stat.mtimeMs;
+                    activeDir = dir;
+                }
+            } else {
+                const stat = fs.statSync(dir);
+                if (maxTime === 0 && stat.mtimeMs > maxTime) {
+                    activeDir = dir;
+                }
             }
         }
+        return activeDir;
     } else {
         // Standalone Agent — directory name unchanged
         const suffix = 'Antigravity';
