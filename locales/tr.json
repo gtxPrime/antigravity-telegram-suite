@@ -66,7 +66,8 @@
     "title": "📝 Son Yanıt:\n\n",
     "no_new": "[Yeni mesaj yok]",
     "error": "❌ Hata: {error}\n(Antigravity açık mı?)",
-    "last_agent_reply": "📋 Son Agent Yanıtı:"
+    "last_agent_reply": "📋 Son Agent Yanıtı:",
+    "not_found_active": "⚠️ Aktif sohbet penceresi bulunamadı. Lütfen /agents komutuyla bir sohbet seçin veya yeni bir mesaj gönderin."
   },
   "screenshot": {
     "taking": "📸 IDE ekran görüntüsü alınıyor (CDP üzerinden)...",

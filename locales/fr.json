@@ -66,7 +66,8 @@
     "title": "📝 Dernière Réponse :\n\n",
     "no_new": "[Aucun nouveau message]",
     "error": "❌ Erreur : {error}\n(Est-ce que Antigravity est ouvert ?)",
-    "last_agent_reply": "📋 Dernière réponse de l'agent :"
+    "last_agent_reply": "📋 Dernière réponse de l'agent :",
+    "not_found_active": "⚠️ Fenêtre de discussion active introuvable. Veuillez sélectionner une discussion avec la commande /agents ou envoyer un nouveau message."
   },
   "screenshot": {
     "taking": "📸 Capture de l'IDE en cours (via CDP)...",

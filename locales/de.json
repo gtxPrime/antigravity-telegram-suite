@@ -66,7 +66,8 @@
     "title": "📝 Letzte Antwort:\n\n",
     "no_new": "[Keine neuen Nachrichten]",
     "error": "❌ Fehler: {error}\n(Ist Antigravity geöffnet?)",
-    "last_agent_reply": "📋 Letzte Antwort des Agenten:"
+    "last_agent_reply": "📋 Letzte Antwort des Agenten:",
+    "not_found_active": "⚠️ Aktives Chat-Fenster nicht gefunden. Bitte wählen Sie einen Chat mit dem Befehl /agents oder senden Sie eine neue Nachricht."
   },
   "screenshot": {
     "taking": "📸 Nehme IDE-Screenshot auf (über CDP)...",

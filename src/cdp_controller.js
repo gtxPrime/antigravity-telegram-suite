@@ -129,8 +129,10 @@ async function resolveTargets(port, includeIframe = true) {
 
         // Dynamic fallback: prefer the target matching the active workspace
         if (activeWorkspaceName) {
-            const aMatch = a.title.toLowerCase().includes(activeWorkspaceName) ? 1 : 0;
-            const bMatch = b.title.toLowerCase().includes(activeWorkspaceName) ? 1 : 0;
+            const normalize = (s) => (s || '').toLowerCase().replace(/[-_]/g, ' ');
+            const searchName = normalize(activeWorkspaceName);
+            const aMatch = normalize(a.title).includes(searchName) ? 1 : 0;
+            const bMatch = normalize(b.title).includes(searchName) ? 1 : 0;
             if (aMatch !== bMatch) return bMatch - aMatch;
         }
         return 0;
@@ -607,7 +609,7 @@ async function getFullLatestResponse(port, specificTargetId = null, threadName =
     
     if (modalText) return { text: modalText.trim(), buttons: modalButtons };
 
-    return { text: "[No previous message stored yet. Run a prompt first.]", buttons: null };
+    return { text: t('latest.not_found_active'), buttons: null };
 }
 
 async function captureAgentScreenshot(port) {
@@ -793,7 +795,9 @@ async function sendViaCDP(text, port, specificTargetId = null) {
             sortedCandidates = candidates.filter(t => t.id === preferredTargetId);
         }
     } else if (activeWorkspaceName) {
-        sortedCandidates = candidates.filter(t => t.title && t.title.toLowerCase().includes(activeWorkspaceName.toLowerCase()));
+        const normalize = (s) => (s || '').toLowerCase().replace(/[-_]/g, ' ');
+        const searchName = normalize(activeWorkspaceName);
+        sortedCandidates = candidates.filter(t => normalize(t.title).includes(searchName));
         if (sortedCandidates.length === 0) sortedCandidates = candidates; // Fallback if none match
     }
 
@@ -967,13 +971,14 @@ async function triggerModelMenu(port) {
 
 async function listAgentThreads(port) {
     const candidates = await resolveTargets(port, false);
+    
+    // Phase 1: Check for Standalone Agent 2.0 (returns immediately if found)
     for (const target of candidates) {
         try {
             const client = await CDP({ target: target.webSocketDebuggerUrl });
             const { Runtime } = client;
             await Runtime.enable();
             
-            // First check if Standalone Agent 2.0 UI is active (presence of project cards in DOM)
             const isStandaloneRes = await Runtime.evaluate({
                 expression: `(() => {
                     return !!document.querySelector('[data-project-card="true"]');
@@ -991,7 +996,6 @@ async function listAgentThreads(port) {
                             const parent = card.parentElement;
                             if (!parent) continue;
                             
-                            // Extract workspace name and clean trailing numbers
                             const cloned = card.cloneNode(true);
                             cloned.querySelectorAll('svg').forEach(el => el.remove());
                             const wsNameRaw = cloned.textContent.trim();
@@ -999,7 +1003,6 @@ async function listAgentThreads(port) {
                             
                             if (!wsName) continue;
                             
-                            // Find conversation threads in this specific section parent
                             const convoEls = Array.from(parent.querySelectorAll('div[role="button"]'))
                                 .filter(el => el.className && typeof el.className === 'string' && el.className.includes('ml-[22px]'));
                                 
@@ -1031,96 +1034,169 @@ async function listAgentThreads(port) {
                 
                 await client.close();
                 const workspaces = JSON.parse(threadsRes.result?.value || '[]');
-                if (workspaces.length > 0) return workspaces;
-                continue;
+                return workspaces;
             }
             
-            // Fallback for Classic IDE:
-            const clickRes = await Runtime.evaluate({
-                expression: `(() => {
-                    const icon = document.querySelector("svg.lucide-history");
-                    if (!icon) return false;
-                    (icon.closest("button") || icon.parentElement).click();
-                    return true;
-                })()`
-            });
-            if (!clickRes.result?.value) { await client.close(); continue; }
-            await new Promise(r => setTimeout(r, 800));
-            const res = await Runtime.evaluate({
+            await client.close();
+        } catch(e) { console.debug(`[listAgentThreads] standalone check error: ${e.message}`); }
+    }
+    
+    // Phase 2: Classic IDE — collect threads from ALL open windows
+    const normalize = (s) => (s || '').toLowerCase().replace(/[-_]/g, ' ');
+    const allWorkspaces = [];
+    let popupCollected = false;
+    
+    for (const target of candidates) {
+        try {
+            const client = await CDP({ target: target.webSocketDebuggerUrl });
+            const { Runtime } = client;
+            await Runtime.enable();
+            
+            // 1. Collect popup threads only once (they show global recent threads, same across all windows)
+            if (!popupCollected) {
+                const clickRes = await Runtime.evaluate({
+                    expression: `(() => {
+                        if (document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]')) return 'open';
+                        const icon = document.querySelector("svg.lucide-history");
+                        if (icon) { (icon.closest("button") || icon.parentElement).click(); return 'clicked'; }
+                        return 'no_popup';
+                    })()`
+                });
+                
+                if (clickRes.result?.value !== 'no_popup') {
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Expand "show more" if present
+                    await Runtime.evaluate({
+                        expression: `(() => {
+                            const input = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
+                            if (!input) return;
+                            let container = input;
+                            for (let i = 0; i < 15; i++) { if (container.parentElement) container = container.parentElement; }
+                            const allDivs = Array.from(container.querySelectorAll('div'));
+                            const rows = allDivs.filter(d => d.className && d.className.includes('px-2.5') && d.className.includes('cursor-pointer') && d.querySelector('span'));
+                            const firstShowMore = rows.find(r => /^show\\s+\\d+\\s+more/i.test(r.textContent.trim()));
+                            if (firstShowMore) firstShowMore.click();
+                        })()`
+                    });
+                    await new Promise(r => setTimeout(r, 500));
+                    
+                    // Extract popup threads
+                    const popupRes = await Runtime.evaluate({
+                        expression: `
+                            (() => {
+                                const input = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
+                                let container = document.body;
+                                if (input) { container = input; for (let i = 0; i < 15; i++) { if (container.parentElement) container = container.parentElement; } }
+                                const allDivs = Array.from(container.querySelectorAll('div'));
+                                const sectionHeaders = allDivs.filter(d =>
+                                    d.className && typeof d.className === 'string' &&
+                                    (d.className.includes('opacity-50') || d.className.includes('text-muted-foreground')) &&
+                                    d.className.includes('px-2.5') && d.className.includes('pt-4') &&
+                                    d.childNodes.length === 1 && d.childNodes[0].nodeType === 3
+                                );
+                                const rows = allDivs.filter(d =>
+                                    d.className && typeof d.className === 'string' &&
+                                    d.className.includes('px-2.5') && d.className.includes('cursor-pointer') && d.querySelector('span')
+                                );
+                                const workspaces = [];
+                                for (const row of rows) {
+                                    const nameEl = row.querySelector('span.truncate, span.text-sm span');
+                                    const timeEl = row.querySelector('span.text-xs.opacity-50.ml-4');
+                                    const wsEl = row.querySelector('span.text-xs.min-w-0.opacity-50.truncate');
+                                    const name = nameEl ? nameEl.textContent.trim() : '';
+                                    const time = timeEl ? timeEl.textContent.trim() : '';
+                                    if (!name || /^show\\s+\\d+\\s+more/i.test(name)) continue;
+                                    let wsName = '';
+                                    if (wsEl) wsName = wsEl.textContent.trim();
+                                    if (!wsName) {
+                                        let section = '';
+                                        for (const h of sectionHeaders) {
+                                            if (row.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING) section = h.textContent.trim();
+                                        }
+                                        if (section.startsWith('Recent in ')) wsName = section.replace('Recent in ', '');
+                                        else if (section === 'Current') {
+                                            const rh = sectionHeaders.find(h => h.textContent.trim().startsWith('Recent in '));
+                                            wsName = rh ? rh.textContent.trim().replace('Recent in ', '') : 'Current';
+                                        } else wsName = 'IDE';
+                                    }
+                                    let group = workspaces.find(w => w.workspace === wsName);
+                                    if (!group) { group = { workspace: wsName, threads: [] }; workspaces.push(group); }
+                                    group.threads.push({ name, time });
+                                }
+                                return JSON.stringify(workspaces);
+                            })()
+                        `,
+                        returnByValue: true
+                    });
+                    
+                    // Close popup
+                    await Runtime.evaluate({
+                        expression: `(() => {
+                            document.body.click();
+                            const esc = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true });
+                            document.activeElement.dispatchEvent(esc);
+                            document.dispatchEvent(esc);
+                        })()`
+                    });
+                    
+                    const popupWorkspaces = JSON.parse(popupRes.result?.value || '[]');
+                    for (const pw of popupWorkspaces) {
+                        const existing = allWorkspaces.find(w => normalize(w.workspace) === normalize(pw.workspace));
+                        if (existing) {
+                            for (const t of pw.threads) {
+                                if (!existing.threads.some(et => et.name === t.name)) existing.threads.push(t);
+                            }
+                        } else {
+                            allWorkspaces.push(pw);
+                        }
+                    }
+                    popupCollected = true;
+                }
+            }
+            
+            // 2. Always try home screen extraction for this window's workspace-specific threads
+            const homeRes = await Runtime.evaluate({
                 expression: `
                     (() => {
-                        const input = document.querySelector('input[placeholder*="Search all"], input[placeholder="Select a conversation"], input[placeholder*="convo"]');
-                        if (!input) return JSON.stringify([]);
-                        let container = input;
-                        for (let i = 0; i < 15; i++) { if (container.parentElement) container = container.parentElement; }
-                        const allDivs = Array.from(container.querySelectorAll('div'));
-                        const sectionHeaders = allDivs.filter(d =>
-                            d.className && typeof d.className === 'string' &&
-                            (d.className.includes('opacity-50') || d.className.includes('text-muted-foreground')) &&
-                            d.className.includes('px-2.5') &&
-                            d.className.includes('pt-4') &&
-                            d.childNodes.length === 1 &&
-                            d.childNodes[0].nodeType === 3
-                        );
-                        const rows = allDivs.filter(d =>
-                            d.className.includes('px-2.5') &&
-                            d.className.includes('cursor-pointer') &&
-                            d.querySelector('span')
-                        );
-                        const workspaces = [];
-                        for (const row of rows) {
-                            const nameEl = row.querySelector('span.truncate, span.text-sm span');
-                            const timeEl = row.querySelector('span.text-xs.opacity-50.ml-4');
-                            const wsEl = row.querySelector('span.text-xs.min-w-0.opacity-50.truncate');
-                            const name = nameEl ? nameEl.textContent.trim() : '';
-                            const time = timeEl ? timeEl.textContent.trim() : '';
-                            if (!name || /^show\\s+\\d+\\s+more/i.test(name)) continue;
-                            
-                            let wsName = '';
-                            if (wsEl) {
-                                wsName = wsEl.textContent.trim();
-                            }
-                            if (!wsName) {
-                                let section = '';
-                                for (const h of sectionHeaders) {
-                                    if (row.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING) {
-                                        section = h.textContent.trim();
-                                    }
-                                }
-                                if (section.startsWith('Recent in ')) {
-                                    wsName = section.replace('Recent in ', '');
-                                } else if (section === 'Current') {
-                                    const rh = sectionHeaders.find(h => h.textContent.trim().startsWith('Recent in '));
-                                    wsName = rh ? rh.textContent.trim().replace('Recent in ', '') : 'Current';
-                                } else {
-                                    wsName = 'IDE';
-                                }
-                            }
-                            
-                            let group = workspaces.find(w => w.workspace === wsName);
-                            if (!group) { group = { workspace: wsName, threads: [] }; workspaces.push(group); }
-                            group.threads.push({ name, time });
+                        const panel = document.querySelector(".antigravity-agent-side-panel");
+                        if (!panel) return JSON.stringify([]);
+                        const wsEl = panel.querySelector("div.text-lg.font-medium");
+                        const wsName = wsEl ? wsEl.textContent.trim() : "";
+                        if (!wsName) return JSON.stringify([]);
+                        const btns = Array.from(panel.querySelectorAll("button.group.cursor-pointer"));
+                        const threads = [];
+                        for (const btn of btns) {
+                            const nameEl = btn.querySelector("div.truncate");
+                            const timeEl = btn.querySelector("p.text-muted-foreground");
+                            const name = nameEl ? nameEl.textContent.trim() : "";
+                            const time = timeEl ? timeEl.textContent.trim() : "";
+                            if (name) threads.push({ name, time });
                         }
-                        return JSON.stringify(workspaces);
+                        if (threads.length === 0) return JSON.stringify([]);
+                        return JSON.stringify([{ workspace: wsName, threads }]);
                     })()
                 `,
                 returnByValue: true
             });
-            // Close popup
-            await Runtime.evaluate({
-                expression: `(() => {
-                    document.body.click();
-                    const esc = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true });
-                    document.activeElement.dispatchEvent(esc);
-                    document.dispatchEvent(esc);
-                })()`
-            });
+            
+            const homeWorkspaces = JSON.parse(homeRes.result?.value || '[]');
+            for (const hw of homeWorkspaces) {
+                const existing = allWorkspaces.find(w => normalize(w.workspace) === normalize(hw.workspace));
+                if (existing) {
+                    for (const t of hw.threads) {
+                        if (!existing.threads.some(et => et.name === t.name)) existing.threads.push(t);
+                    }
+                } else {
+                    allWorkspaces.push(hw);
+                }
+            }
+            
             await client.close();
-            const workspaces = JSON.parse(res.result?.value || '[]');
-            if (workspaces.length > 0) return workspaces;
-        } catch(e) { console.debug(`[listAgentThreads] popup error: ${e.message}`); }
+        } catch(e) { console.debug(`[listAgentThreads] window error: ${e.message}`); }
     }
-    return [];
+    
+    return allWorkspaces;
 }
 
 function setActiveWorkspace(name) {
@@ -1389,8 +1465,8 @@ async function getActiveThreadInfo(port, specificTargetId = null) {
 
     // 2. Fallback: Get Thread ID via file-system logs of the app
     // New IDE uses transcript.jsonl, legacy used overview.txt — check both
-    // Only apply global fallback if no specific target is requested!
-    if (!threadId && !specificTargetId) {
+    // Only apply global fallback if no specific target is requested AND no active workspace is set!
+    if (!threadId && !specificTargetId && !activeWorkspaceName) {
         try {
             const appDataName = (process.env.ANTIGRAVITY_PREFERRED_APP || 'agent') === 'ide' ? 'antigravity-ide' : 'antigravity';
             const brainPath = path.join(os.homedir(), '.gemini', appDataName, 'brain');

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-06-03
+
+### Fixed
+- **`/agents` Multi-Window Thread Collection**: Rewrote `listAgentThreads` to collect threads from ALL open IDE windows instead of returning from the first one. The history popup shows global recent threads, so workspaces with only older conversations were invisible.
+- **Home Screen Thread Extraction**: Added a new extraction path that reads workspace-specific threads directly from the Agent panel's home screen (`button.group.cursor-pointer` inside `.antigravity-agent-side-panel`), catching threads that are too old to appear in the popup.
+- **Workspace Name Normalization**: Fixed underscore/hyphen mismatch (e.g. `Dertli_Orman` vs `Dertli Orman`) in `resolveTargets` and `sendViaCDP` by normalizing with `replace(/[-_]/g, ' ')`.
+- **`/latest` Workspace Scoping**: When no active chat window exists in the current workspace, the bot now returns a proper i18n warning instead of silently falling back to another workspace's conversation.
+
+### Changed
+- **i18n Convention Enforced**: All new UI strings must be added to all 5 locale files (`en`, `tr`, `de`, `es`, `fr`) simultaneously. Added `latest.not_found_active` key across all locales.
+
 ## [3.3.0] - 2026-06-03
 
 ### Added
