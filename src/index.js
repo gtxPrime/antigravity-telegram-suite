@@ -275,17 +275,17 @@ function checkAuth(ctx, next) {
     if (ALLOWED_CHAT_IDS.length === 0) {
         console.log(`\n🔔 NEW CHAT ID DETECTED: ${ctx.chat.id}`);
         console.log(`Please add ALLOWED_CHAT_ID=${ctx.chat.id} to your .env file and restart.\n`);
-        return ctx.reply(`Welcome! Your Chat ID is: ${ctx.chat.id}\nPlease add it to the .env file as ALLOWED_CHAT_ID and restart the bot.`).catch(e => console.error('[checkAuth]', e.message));
+        return ctx.reply(t('auth.setup_welcome', { chatId: ctx.chat.id })).catch(e => console.error('[checkAuth]', e.message));
     }
     if (!ALLOWED_CHAT_IDS.includes(ctx.chat.id.toString())) {
         const from = ctx.from || ctx.chat;
         if (from && ALLOWED_CHAT_IDS.length > 0) {
-            const username = from.username ? `@${from.username}` : 'Yok';
+            const username = from.username ? `@${from.username}` : 'N/A';
             const fullName = `${from.first_name || ''} ${from.last_name || ''}`.trim() || t('auth.anonymous');
             
-            let actionDetails = `Eylem: ${ctx.updateType || 'Bilinmiyor'}`;
-            if (ctx.message && ctx.message.text) actionDetails = `Mesaj: "${ctx.message.text}"`;
-            else if (ctx.callbackQuery) actionDetails = `Buton: ${ctx.callbackQuery.data}`;
+            let actionDetails = t('auth.action', { type: ctx.updateType || t('auth.unknown') });
+            if (ctx.message && ctx.message.text) actionDetails = t('auth.message', { text: ctx.message.text });
+            else if (ctx.callbackQuery) actionDetails = t('auth.button', { data: ctx.callbackQuery.data });
 
             const alertMsg = t('auth.unauthorized_attempt', { name: fullName, username, id: from.id, details: actionDetails });
             ctx.telegram.sendMessage(ALLOWED_CHAT_IDS[0], alertMsg, { parse_mode: 'HTML' }).catch(e => console.error('[checkAuth Alert]', e.message));
@@ -424,12 +424,12 @@ bot.command('close', async (ctx) => {
 });
 
 bot.command('close_window', async (ctx) => {
-    ctx.reply(t('ide.closing_window') || '🪟 Pencere kapatılıyor...');
+    ctx.reply(t('ide.closing_window') || '🪟 Closing window...');
     const success = await closeWindow(CDP_PORT);
     if (success) {
-        ctx.reply(t('ide.window_closed') || '✅ Pencere başarıyla kapatıldı.');
+        ctx.reply(t('ide.window_closed') || '✅ Window closed successfully.');
     } else {
-        ctx.reply(t('ide.window_close_failed') || '❌ Pencere kapatılamadı. Açık pencere yok mu?');
+        ctx.reply(t('ide.window_close_failed') || '❌ Failed to close window. Is there an open window?');
     }
 });
 
@@ -724,7 +724,7 @@ bot.command('agents', async (ctx) => {
                 if (thread.workspace) setActiveWorkspace(thread.workspace);
                 // Update lastResolvedThreadId so /latest reads from this thread
                 await snapshotChatState(CDP_PORT, success).catch(() => {});
-                await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`, thread.name, thread.workspace);
+                await sendMainMenu(ctx, t('agents.switched_plain', { name: thread.name }), thread.name, thread.workspace);
             }
         } else {
             ctx.reply(t('agents.invalid_number') || '❌ Invalid thread number.');
@@ -786,7 +786,7 @@ bot.hears(/^\/agents_(\d+)$/, async (ctx) => {
             // Update lastResolvedThreadId so /latest reads from this thread
             await snapshotChatState(CDP_PORT, targetId).catch(() => {});
             // Menüyü yenile — buton yeni ajan ismini göstersin
-            await sendMainMenu(ctx, `✅ Sohbet değiştirildi: ${thread.name}`, thread.name, thread.workspace);
+            await sendMainMenu(ctx, t('agents.switched_plain', { name: thread.name }), thread.name, thread.workspace);
         }
     } else {
         ctx.reply(t('agents.invalid_number') || '❌ Invalid thread number.');
@@ -1052,8 +1052,8 @@ const handleAutoAccept = async (ctx) => {
         } else {
             // Unknown subcommand — show inline buttons
             const buttons = [
-                [{ text: '⚡ ' + (autoaccept.isEnabled ? 'Kapat' : 'Aç'), callback_data: autoaccept.isEnabled ? 'aa_off' : 'aa_on' }],
-                [{ text: '📊 Durum', callback_data: 'aa_status' }]
+                [{ text: '⚡ ' + (autoaccept.isEnabled ? t('menu.btn_off') : t('menu.btn_on')), callback_data: autoaccept.isEnabled ? 'aa_off' : 'aa_on' }],
+                [{ text: t('menu.btn_status'), callback_data: 'aa_status' }]
             ];
             ctx.reply(t('autoaccept.status_title') + (autoaccept.isEnabled ? t('autoaccept.status_enabled') : t('autoaccept.status_disabled')), {
                 parse_mode: 'HTML',
@@ -1133,7 +1133,7 @@ function doLaunchWorkspace(ctx, workspace) {
                         if (autoaccept.isEnabled) {
                             autoaccept.enable(CDP_PORT).catch(() => {});
                         }
-                        await sendMainMenu(ctx, t('workspace.started') || '📁 Çalışma alanı başarıyla değiştirildi!');
+                        await sendMainMenu(ctx, t('workspace.started') || '📁 Workspace switched successfully!');
                         return;
                     }
                 } catch (e) {
@@ -1150,7 +1150,7 @@ function doLaunchWorkspace(ctx, workspace) {
                         if (autoaccept.isEnabled) {
                             autoaccept.enable(CDP_PORT).catch(() => {});
                         }
-                        await sendMainMenu(ctx, t('workspace.started') || '📁 Çalışma alanı başarıyla değiştirildi!');
+                        await sendMainMenu(ctx, t('workspace.started') || '📁 Workspace switched successfully!');
                         return;
                     }
                 } catch (e) {
@@ -1326,13 +1326,13 @@ bot.command('app', async (ctx) => {
     const appName = currentApp === 'ide' ? '💻 Classic Monaco IDE' : '🤖 Standalone Agent (2.0)';
     const currentPort = CDP_PORT;
     
-    let msg = t('app.selection_title') || `🤖 <b>Antigravity Uygulama Seçimi</b>\n\n`;
+    let msg = t('app.selection_title') || `🤖 <b>Antigravity App Selection</b>\n\n`;
     msg += t('app.preferred_app', { appName }) + '\n';
     msg += t('app.active_port', { port: currentPort }) + '\n\n';
     msg += t('app.select_prompt') + '\n';
     msg += `• <b>Standalone Agent:</b> CDP Port 9333\n`;
     msg += `• <b>Monaco IDE:</b> CDP Port 9334\n\n`;
-    msg += t('app.persistent_selection') || `⚡ <i>Seçiminiz kalıcı olarak .env dosyasına kaydedilir ve botu yeniden başlatmadan anında uygulanır.</i>`;
+    msg += t('app.persistent_selection') || `⚡ <i>Your selection is permanently saved to the .env file and applied instantly without restarting the bot.</i>`;
 
     const buttons = [
         [{ text: '🤖 Standalone Agent (Port: 9333)', callback_data: 'pref_app_agent' }],
@@ -1638,8 +1638,8 @@ bot.action(/focus_(.+)/, async (ctx) => {
     }
     setPreferredWindow(selected.id);
     const shortTitle = selected.title.substring(0, 30);
-    ctx.answerCbQuery(t('ask.focus_toast', { title: shortTitle }) || `Yanıtlanıyor: ${shortTitle}`);
-    ctx.reply(t('ask.focus_success', { title: selected.title }) || `✅ <b>${selected.title}</b> ajanına kilitlenildi.\n✍️ Şimdi yazacağınız mesaj doğrudan bu ajana gidecek.`, { 
+    ctx.answerCbQuery(t('ask.focus_toast', { title: shortTitle }));
+    ctx.reply(t('ask.focus_success', { title: selected.title }), { 
         parse_mode: 'HTML',
         reply_parameters: { message_id: ctx.callbackQuery.message.message_id, allow_sending_without_reply: true }
     });
@@ -2073,7 +2073,7 @@ function extractQuotedContext(ctx) {
 // ===== INTERACTIVE MODAL ANSWER HANDLER =====
 bot.action(/^ans_(.+)$/, async (ctx) => {
     const answer = ctx.match[1];
-    await ctx.answerCbQuery(`Seçiminiz iletildi: ${answer}`);
+    await ctx.answerCbQuery(t('interactive_modal.answer_sent', { answer }));
     
     let targetId = getPreferredTargetId();
     let explicitThreadName = null;

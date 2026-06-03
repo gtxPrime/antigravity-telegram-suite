@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-06-03
+
+### Added
+- **Expanded Language Support**: The bot now officially supports 5 languages: English, Türkçe, Deutsch (German), Español (Spanish), and Français (French).
+- **Dynamic Language Menu**: The `/lang` command automatically detects and offers all available `locales/*.json` translation files.
+
+### Fixed
+- **Complete Localization Audit (Phase 2)**: Eliminated all remaining hardcoded Turkish fallback strings scattered across the codebase.
+- **Turbo Mode i18n**: The `/turbo` orchestration engine (Phase 1, 2, 3, etc. progress messages) is now fully translatable.
+- **CDP Controller i18n**: Hardcoded UI elements like "Quota remaining" or internal console logs have been refactored to use English fallbacks and translation keys.
+
+
 ## [3.2.1] - 2026-05-28
 
 ### Fixed

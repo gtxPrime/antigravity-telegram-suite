@@ -1624,7 +1624,7 @@ async function getAvailableModels(port) {
             const { Runtime } = client;
             await Runtime.enable();
 
-            // Önce model menüsünü aç
+            // Open model menu first
             await Runtime.evaluate({
                 expression: `
                     ${UI_LOCATORS_SCRIPT}
@@ -1636,7 +1636,7 @@ async function getAvailableModels(port) {
                 `, returnByValue: true
             });
 
-            // Dropdown'un açılmasını bekle
+            // Wait for dropdown to open
             await new Promise(r => setTimeout(r, 500));
 
             // Model listesini oku
@@ -1870,8 +1870,8 @@ async function getQuota(_port, t) {
             if (apiData) break;
         }
 
-        if (!apiData) { console.log('[Quota] Connect RPC yanıt yok'); return null; }
-        console.log('[Quota] API yanıtı alındı');
+        if (!apiData) { console.log('[Quota] No Connect RPC response'); return null; }
+        console.log('[Quota] API response received');
 
         // 4. Format the response
         const userStatus = apiData.userStatus || apiData;
@@ -1936,7 +1936,7 @@ async function getQuota(_port, t) {
                         let icon = '🟢';
                         if (pct < 50) icon = '🟡';
                         if (pct < 15) icon = '🔴';
-                        line += ` ${icon} ${filled}${empty} %${pct} kalan`;
+                        line += t ? t('quota.remaining_pct', { pct: pct, icon: icon, filled: filled, empty: empty }) : ` ${icon} ${filled}${empty} ${pct}% remaining`;
                     }
                     if (m.quotaInfo.resetTime) {
                         try {
@@ -1949,7 +1949,7 @@ async function getQuota(_port, t) {
                             }
                         } catch(e) {}
                     }
-                    if (rem === 0) line += t ? t('quota.empty') : ' ⛔ TÜKENDİ';
+                    if (rem === 0) line += t ? t('quota.empty') : ' ⛔ EXHAUSTED';
                 }
                 result.push(line);
             }

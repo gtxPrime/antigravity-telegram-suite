@@ -19,7 +19,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
     try {
         // Send initial status
-        const statusMsg = await ctx.reply(t('turbo.p1_start') || '🚀 <b>Turbo Mod Başlatıldı:</b>\n\n⏳ <b>Faz 1:</b> Model seçiliyor (Claude)...', { parse_mode: 'HTML' });
+        const statusMsg = await ctx.reply(t('turbo.p1_start') || '🚀 <b>Turbo Mode Started:</b>\n\n⏳ <b>Phase 1:</b> Selecting model (Claude)...', { parse_mode: 'HTML' });
         statusMsgId = statusMsg.message_id;
 
         // --- PHASE 1: PLANNING (Claude) ---
@@ -28,7 +28,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
         await ctx.telegram.editMessageText(
             ctx.chat.id, statusMsgId, null,
-            t('turbo.p1_planning') || '🚀 <b>Turbo Mod Başlatıldı:</b>\n\n⏳ <b>Faz 1:</b> Claude planı hazırlıyor...',
+            t('turbo.p1_planning') || '🚀 <b>Turbo Mode Started:</b>\n\n⏳ <b>Phase 1:</b> Claude is preparing the plan...',
             { parse_mode: 'HTML' }
         ).catch(() => {});
 
@@ -39,7 +39,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         await snapshotChatState(CDP_PORT, explicitTargetId).catch(() => {});
         
         let isDone = await waitForAgentResponse(CDP_PORT, 600000, createProgressHandler(ctx), sentTargetId);
-        if (!isDone) throw new Error(t('turbo.p1_error') || "Claude planlama aşamasında zaman aşımına uğradı.");
+        if (!isDone) throw new Error(t('turbo.p1_error') || "Claude timed out during the planning phase.");
 
         let _planTextRaw = await getFullLatestResponse(CDP_PORT, sentTargetId);
         let planText = typeof _planTextRaw === 'string' ? _planTextRaw : _planTextRaw.text;
@@ -48,7 +48,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         // Update Telegram Status
         await ctx.telegram.editMessageText(
             ctx.chat.id, statusMsgId, null,
-            t('turbo.p2_switching') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Claude planı tamamladı.\n⏳ <b>Faz 2:</b> Model değiştiriliyor (Gemini)...',
+            t('turbo.p2_switching') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude finished the plan.\n⏳ <b>Phase 2:</b> Switching model (Gemini)...',
             { parse_mode: 'HTML' }
         ).catch(() => {});
 
@@ -58,7 +58,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
         await ctx.telegram.editMessageText(
             ctx.chat.id, statusMsgId, null,
-            t('turbo.p2_coding') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Claude planı tamamladı.\n⏳ <b>Faz 2:</b> Gemini kodları yazıyor...',
+            t('turbo.p2_coding') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude finished the plan.\n⏳ <b>Phase 2:</b> Gemini is writing code...',
             { parse_mode: 'HTML' }
         ).catch(() => {});
 
@@ -69,7 +69,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         await snapshotChatState(CDP_PORT, sentTargetId).catch(() => {});
         
         isDone = await waitForAgentResponse(CDP_PORT, 600000, createProgressHandler(ctx), sentTargetId2);
-        if (!isDone) throw new Error(t('turbo.p2_error') || "Gemini kodlama aşamasında zaman aşımına uğradı.");
+        if (!isDone) throw new Error(t('turbo.p2_error') || "Gemini timed out during the coding phase.");
 
         let _codeTextRaw = await getFullLatestResponse(CDP_PORT, sentTargetId2);
         let codeText = typeof _codeTextRaw === 'string' ? _codeTextRaw : _codeTextRaw.text;
@@ -78,7 +78,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         // --- PHASE 3: REVIEW (Claude) ---
         await ctx.telegram.editMessageText(
             ctx.chat.id, statusMsgId, null,
-            t('turbo.p3_switching') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⏳ <b>Faz 3:</b> Model değiştiriliyor (Claude) - İnceleme...',
+            t('turbo.p3_switching') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⏳ <b>Phase 3:</b> Switching model (Claude) - Reviewing...',
             { parse_mode: 'HTML' }
         ).catch(() => {});
 
@@ -87,7 +87,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
         await ctx.telegram.editMessageText(
             ctx.chat.id, statusMsgId, null,
-            t('turbo.p3_reviewing') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⏳ <b>Faz 3:</b> Claude yazılan kodu inceliyor...',
+            t('turbo.p3_reviewing') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⏳ <b>Phase 3:</b> Claude is reviewing the code...',
             { parse_mode: 'HTML' }
         ).catch(() => {});
 
@@ -98,7 +98,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         await snapshotChatState(CDP_PORT, sentTargetId2).catch(() => {});
         
         isDone = await waitForAgentResponse(CDP_PORT, 600000, createProgressHandler(ctx), sentTargetId3);
-        if (!isDone) throw new Error(t('turbo.p3_error') || "Claude inceleme aşamasında zaman aşımına uğradı.");
+        if (!isDone) throw new Error(t('turbo.p3_error') || "Claude timed out during the review phase.");
 
         let _reviewTextRaw = await getFullLatestResponse(CDP_PORT, sentTargetId3);
         let reviewText = typeof _reviewTextRaw === 'string' ? _reviewTextRaw : _reviewTextRaw.text;
@@ -112,7 +112,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
             // --- PHASE 4: FIX (Gemini) ---
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, null,
-                t('turbo.p4_switching') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Model değiştiriliyor (Gemini) - Düzeltme...',
+                t('turbo.p4_switching') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Switching model (Gemini) - Fixing...',
                 { parse_mode: 'HTML' }
             ).catch(() => {});
 
@@ -121,7 +121,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, null,
-                t('turbo.p4_fixing') || '🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Gemini hataları düzeltiyor...',
+                t('turbo.p4_fixing') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Gemini is fixing the issues...',
                 { parse_mode: 'HTML' }
             ).catch(() => {});
 
@@ -132,7 +132,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
             await snapshotChatState(CDP_PORT, sentTargetId3).catch(() => {});
             
             isDone = await waitForAgentResponse(CDP_PORT, 600000, createProgressHandler(ctx), sentTargetId4);
-            if (!isDone) throw new Error(t('turbo.p4_error') || "Gemini düzeltme aşamasında zaman aşımına uğradı.");
+            if (!isDone) throw new Error(t('turbo.p4_error') || "Gemini timed out during the fixing phase.");
 
             let _fixTextRaw = await getFullLatestResponse(CDP_PORT, sentTargetId4);
             fixText = typeof _fixTextRaw === 'string' ? _fixTextRaw : _fixTextRaw.text;
@@ -146,7 +146,7 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
         try {
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, null,
-                t('turbo.p5_summarizing') || '⏳ Faz 5: Sonuç özeti hazırlanıyor...',
+                t('turbo.p5_summarizing') || '⏳ Phase 5: Preparing summary...',
                 { parse_mode: 'HTML' }
             ).catch(() => {});
 
@@ -185,7 +185,7 @@ Keep it concise (max 10 lines). Use emoji for readability.`;
         await snapshotChatState(CDP_PORT, lastTargetId).catch(() => {});
         
         isDone = await waitForAgentResponse(CDP_PORT, 300000, createProgressHandler(ctx), sentTargetId5);
-        if (!isDone) throw new Error(t('turbo.p5_error') || "Özet aşamasında zaman aşımına uğradı.");
+        if (!isDone) throw new Error(t('turbo.p5_error') || "Timed out during the summary phase.");
 
             let _summaryTextRaw = await getFullLatestResponse(CDP_PORT, sentTargetId5);
             let summaryText = typeof _summaryTextRaw === 'string' ? _summaryTextRaw : _summaryTextRaw.text;
@@ -193,7 +193,7 @@ Keep it concise (max 10 lines). Use emoji for readability.`;
 
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, null,
-                t('turbo.done_summary') || '✨ Turbo Mod Tamamlandı (Özet hazır)',
+                t('turbo.done_summary') || '✨ Turbo Mode Completed (Summary ready)',
                 { parse_mode: 'HTML' }
             ).catch(() => {});
 
@@ -204,13 +204,13 @@ Keep it concise (max 10 lines). Use emoji for readability.`;
             if (hasIssues) {
                 await ctx.telegram.editMessageText(
                     ctx.chat.id, statusMsgId, null,
-                    t('turbo.done_issues') || '🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n⚠️ <b>Faz 3:</b> İnceleme (Claude)\n✅ <b>Faz 4:</b> Düzeltme (Gemini)\n\n✨ Sonuçlar geliyor...',
+                    t('turbo.done_issues') || '🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n⚠️ <b>Phase 3:</b> Review (Claude)\n✅ <b>Phase 4:</b> Fixing (Gemini)\n\n✨ Results are coming...',
                     { parse_mode: 'HTML' }
                 ).catch(() => {});
             } else {
                 await ctx.telegram.editMessageText(
                     ctx.chat.id, statusMsgId, null,
-                    t('turbo.done_no_issues') || '🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n✅ <b>Faz 3:</b> İnceleme - Sorun Yok (Claude)\n\n✨ Sonuçlar geliyor...',
+                    t('turbo.done_no_issues') || '🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n✅ <b>Phase 3:</b> Review - No Issues (Claude)\n\n✨ Results are coming...',
                     { parse_mode: 'HTML' }
                 ).catch(() => {});
             }
@@ -220,7 +220,7 @@ Keep it concise (max 10 lines). Use emoji for readability.`;
     } catch (err) {
         console.error('[turbo] Orchestration error:', err.message);
         if (statusMsgId) {
-            const errTitle = t('turbo.error_title') ? t('turbo.error_title').replace('{error}', err.message) : `❌ <b>Turbo Mod Hatası:</b>\n\n${err.message}`;
+            const errTitle = t('turbo.error_title') ? t('turbo.error_title').replace('{error}', err.message) : `❌ <b>Turbo Mode Error:</b>\n\n${err.message}`;
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, null,
                 errTitle,

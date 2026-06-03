@@ -7,7 +7,12 @@
   "auth": {
     "unauthorized": "❌ Unauthorized.",
     "unauthorized_attempt": "⚠️ <b>Unauthorized Access Attempt!</b>\n\n👤 <b>Person:</b> {name}\n🔖 <b>Username:</b> {username}\n🆔 <b>ID:</b> <code>{id}</code>\n💬 <b>{details}</b>",
-    "anonymous": "Anonymous"
+    "anonymous": "Anonymous",
+    "setup_welcome": "Welcome! Your Chat ID is: {chatId}\nPlease add it to the .env file as ALLOWED_CHAT_ID and restart the bot.",
+    "action": "Action: {type}",
+    "unknown": "Unknown",
+    "message": "Message: \"{text}\"",
+    "button": "Button: {data}"
   },
   "help": {
     "title": "🤖 <b>Available Commands:</b>",
@@ -162,7 +167,8 @@
     "close_ag_desc": "Close Agent",
     "welcome": "👋 Welcome! Your panel is ready:",
     "btn_on": "Turn On",
-    "btn_off": "Turn Off"
+    "btn_off": "Turn Off",
+    "btn_status": "📊 Status"
   },
   "photo": {
     "downloaded": "✅ File downloaded and forwarding to agent...",
@@ -200,7 +206,8 @@
     "model_quota": "⏱️ Model Quota Status:",
     "remaining": " {pct}% remaining",
     "empty": " ⛔ EXHAUSTED",
-    "reset_time": " ⏳ {hours}h {mins}m"
+    "reset_time": " ⏳ {hours}h {mins}m",
+    "remaining_pct": " {icon} {filled}{empty} {pct}% remaining"
   },
   "response_too_long": "⚠️ Response too long. Use /latest to see the full version.",
   "window": {
@@ -222,7 +229,8 @@
     "not_found": "❌ Thread could not be selected.",
     "invalid_number": "❌ Invalid thread number.",
     "no_recent": "ℹ️ No recent active threads found.",
-    "error": "❌ Error: {error}"
+    "error": "❌ Error: {error}",
+    "switched_plain": "✅ Switched to thread: {name}"
   },
   "artifacts": {
     "list_title": "📎 <b>Artifacts for Current Thread:</b>\n\n",
@@ -241,21 +249,21 @@
     "p1_start": "🚀 <b>Turbo Mode Started:</b>\n\n⏳ <b>Phase 1:</b> Selecting model (Claude)...",
     "p1_planning": "🚀 <b>Turbo Mode Started:</b>\n\n⏳ <b>Phase 1:</b> Claude is preparing the plan...",
     "p1_error": "Claude timed out during the planning phase.",
-    "p2_switching": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude completed the plan.\n⏳ <b>Phase 2:</b> Switching model (Gemini)...",
-    "p2_coding": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude completed the plan.\n⏳ <b>Phase 2:</b> Gemini is writing the code...",
+    "p2_switching": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude finished the plan.\n⏳ <b>Phase 2:</b> Switching model (Gemini)...",
+    "p2_coding": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Claude finished the plan.\n⏳ <b>Phase 2:</b> Gemini is writing code...",
     "p2_error": "Gemini timed out during the coding phase.",
-    "p3_switching": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⏳ <b>Phase 3:</b> Switching model (Claude) - Review...",
+    "p3_switching": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⏳ <b>Phase 3:</b> Switching model (Claude) - Reviewing...",
     "p3_reviewing": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⏳ <b>Phase 3:</b> Claude is reviewing the code...",
     "p3_error": "Claude timed out during the review phase.",
     "p4_switching": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Switching model (Gemini) - Fixing...",
     "p4_fixing": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Gemini is fixing the issues...",
     "p4_error": "Gemini timed out during the fixing phase.",
-    "done_issues": "🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n⚠️ <b>Phase 3:</b> Review (Claude)\n✅ <b>Phase 4:</b> Fixing (Gemini)\n\n✨ Results incoming...",
-    "done_no_issues": "🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n✅ <b>Phase 3:</b> Review - No Issues (Claude)\n\n✨ Results incoming...",
+    "done_issues": "🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n⚠️ <b>Phase 3:</b> Review (Claude)\n✅ <b>Phase 4:</b> Fixing (Gemini)\n\n✨ Results are coming...",
+    "done_no_issues": "🚀 <b>Turbo Mode Completed:</b>\n\n✅ <b>Phase 1:</b> Planning (Claude)\n✅ <b>Phase 2:</b> Coding (Gemini)\n✅ <b>Phase 3:</b> Review - No Issues (Claude)\n\n✨ Results are coming...",
     "error_title": "❌ <b>Turbo Mode Error:</b>\n\n{error}",
-    "p5_summarizing": "⏳ Phase 5: Preparing executive summary...",
-    "done_summary": "✨ Turbo Mode Complete (Summary ready)",
-    "p5_error": "Summary phase timed out."
+    "p5_summarizing": "⏳ Phase 5: Preparing summary...",
+    "done_summary": "✨ Turbo Mode Completed (Summary ready)",
+    "p5_error": "Timed out during the summary phase."
   },
   "restart": {
     "closing": "🔄 Closing Antigravity windows and restarting bot..."
@@ -331,6 +339,7 @@
     "options_prompt": "_(You can select one of the buttons below or type your answer)_",
     "confirm_prompt": "_(Please use the 'confirm' button to approve or 'reject' to cancel)_",
     "btn_confirm": "Confirm",
-    "btn_reject": "Reject"
+    "btn_reject": "Reject",
+    "answer_sent": "Your selection has been sent: {answer}"
   }
 }

@@ -7,7 +7,12 @@
   "auth": {
     "unauthorized": "❌ Yetkisiz erişim.",
     "unauthorized_attempt": "⚠️ <b>Yetkisiz Erişim Denemesi!</b>\n\n👤 <b>Kişi:</b> {name}\n🔖 <b>Kullanıcı Adı:</b> {username}\n🆔 <b>ID:</b> <code>{id}</code>\n💬 <b>{details}</b>",
-    "anonymous": "İsimsiz"
+    "anonymous": "İsimsiz",
+    "setup_welcome": "Hoş geldiniz! Chat ID'niz: {chatId}\nLütfen bunu .env dosyasına ALLOWED_CHAT_ID olarak ekleyin ve botu yeniden başlatın.",
+    "action": "Eylem: {type}",
+    "unknown": "Bilinmiyor",
+    "message": "Mesaj: \"{text}\"",
+    "button": "Buton: {data}"
   },
   "help": {
     "title": "🤖 <b>Mevcut Komutlar:</b>",
@@ -162,7 +167,8 @@
     "close_ag_desc": "Ajanı kapatır",
     "welcome": "👋 Hoşgeldin! Panelin hazır:",
     "btn_on": "Aç",
-    "btn_off": "Kapat"
+    "btn_off": "Kapat",
+    "btn_status": "📊 Durum"
   },
   "photo": {
     "downloaded": "✅ Dosya indirildi ve ajana yönlendiriliyor...",
@@ -200,7 +206,8 @@
     "model_quota": "⏱️ Model Kota Durumu:",
     "remaining": " %{pct} kalan",
     "empty": " ⛔ TÜKENDİ",
-    "reset_time": " ⏳ {hours}sa {mins}dk"
+    "reset_time": " ⏳ {hours}sa {mins}dk",
+    "remaining_pct": " {icon} {filled}{empty} %{pct} kalan"
   },
   "response_too_long": "⚠️ Yanıt çok uzun, /latest ile tam halini görebilirsiniz.",
   "window": {
@@ -222,7 +229,8 @@
     "not_found": "❌ Sohbet seçilemedi.",
     "invalid_number": "❌ Geçersiz sohbet numarası.",
     "no_recent": "ℹ️ Son aktif sohbet bulunamadı.",
-    "error": "❌ Hata: {error}"
+    "error": "❌ Hata: {error}",
+    "switched_plain": "✅ Sohbet değiştirildi: {name}"
   },
   "artifacts": {
     "list_title": "📎 <b>Mevcut Sohbetin Artifact'leri:</b>\n\n",
@@ -248,7 +256,7 @@
     "p3_reviewing": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⏳ <b>Faz 3:</b> Claude yazılan kodu inceliyor...",
     "p3_error": "Claude inceleme aşamasında zaman aşımına uğradı.",
     "p4_switching": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Model değiştiriliyor (Gemini) - Düzeltme...",
-    "p4_fixing": "🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ <b>Phase 3:</b> Issues found!\n⏳ <b>Phase 4:</b> Gemini is fixing the issues...",
+    "p4_fixing": "🚀 <b>Turbo Mod Aktif:</b>\n\n✅ <b>Faz 1:</b> Planlama\n✅ <b>Faz 2:</b> Kodlama\n⚠️ <b>Faz 3:</b> Hatalar bulundu!\n⏳ <b>Faz 4:</b> Gemini hataları düzeltiyor...",
     "p4_error": "Gemini düzeltme aşamasında zaman aşımına uğradı.",
     "done_issues": "🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n⚠️ <b>Faz 3:</b> İnceleme (Claude)\n✅ <b>Faz 4:</b> Düzeltme (Gemini)\n\n✨ Sonuçlar geliyor...",
     "done_no_issues": "🚀 <b>Turbo Mod Tamamlandı:</b>\n\n✅ <b>Faz 1:</b> Planlama (Claude)\n✅ <b>Faz 2:</b> Kodlama (Gemini)\n✅ <b>Faz 3:</b> İnceleme - Sorun Yok (Claude)\n\n✨ Sonuçlar geliyor...",
@@ -331,6 +339,7 @@
     "options_prompt": "_(Aşağıdaki butonlardan birini seçebilir veya yazabilirsiniz)_",
     "confirm_prompt": "_(Lütfen onaylamak için 'onayla' veya iptal etmek için 'reddet' butonunu kullanın)_",
     "btn_confirm": "Onayla",
-    "btn_reject": "Reddet"
+    "btn_reject": "Reddet",
+    "answer_sent": "Seçiminiz iletildi: {answer}"
   }
 }
