@@ -281,13 +281,13 @@ function checkAuth(ctx, next) {
         const from = ctx.from || ctx.chat;
         if (from && ALLOWED_CHAT_IDS.length > 0) {
             const username = from.username ? `@${from.username}` : 'Yok';
-            const fullName = `${from.first_name || ''} ${from.last_name || ''}`.trim() || 'İsimsiz';
+            const fullName = `${from.first_name || ''} ${from.last_name || ''}`.trim() || t('auth.anonymous');
             
             let actionDetails = `Eylem: ${ctx.updateType || 'Bilinmiyor'}`;
             if (ctx.message && ctx.message.text) actionDetails = `Mesaj: "${ctx.message.text}"`;
             else if (ctx.callbackQuery) actionDetails = `Buton: ${ctx.callbackQuery.data}`;
 
-            const alertMsg = `⚠️ <b>Yetkisiz Erişim Denemesi!</b>\n\n👤 <b>Kişi:</b> ${fullName}\n🔖 <b>Kullanıcı Adı:</b> ${username}\n🆔 <b>ID:</b> <code>${from.id}</code>\n💬 <b>${actionDetails}</b>`;
+            const alertMsg = t('auth.unauthorized_attempt', { name: fullName, username, id: from.id, details: actionDetails });
             ctx.telegram.sendMessage(ALLOWED_CHAT_IDS[0], alertMsg, { parse_mode: 'HTML' }).catch(e => console.error('[checkAuth Alert]', e.message));
         }
         // Silently ignore unauthorized access to prevent errors if the user blocked the bot
@@ -390,7 +390,7 @@ bot.command('start_ag', async (ctx) => {
         if (err.message === 'IDE_NOT_INSTALLED') {
             ctx.reply(t('standalone.not_installed'));
         } else {
-            ctx.reply(`❌ Başlatma hatası: ${err.message}`);
+            ctx.reply(t('ide.init_error', { error: err.message }));
         }
     }
 });
@@ -434,36 +434,39 @@ bot.command('close_window', async (ctx) => {
 });
 
 const handleStatus = async (ctx) => {
-    let msg = '📊 <b>Antigravity Bot Durum Raporu</b>\n\n';
+    let msg = t('status.report_title');
     
     const agentCheck = await isIDERunning('agent');
     const ideCheck = await isIDERunning('ide');
     
-    msg += `🤖 <b>Antigravity Standalone:</b> ${agentCheck ? '🟢 ÇALIŞIYOR' : '🔴 KAPALI'}\n`;
-    msg += `💻 <b>Antigravity IDE (Classic):</b> ${ideCheck ? '🟢 ÇALIŞIYOR' : '🔴 KAPALI'}\n`;
+    const agentCheckStr = agentCheck ? t('status.running_status') : t('status.stopped_status');
+    const ideCheckStr = ideCheck ? t('status.running_status') : t('status.stopped_status');
+    msg += t('status.standalone_running', { status: agentCheckStr });
+    msg += t('status.ide_running', { status: ideCheckStr });
     
     const activeApp = process.env.ANTIGRAVITY_PREFERRED_APP || 'agent';
-    msg += `🎯 <b>Tercih Edilen Uygulama:</b> <code>${activeApp === 'agent' ? 'Standalone' : 'Classic IDE'}</code>\n\n`;
+    msg += t('status.preferred_app_status', { app: activeApp === 'agent' ? 'Standalone' : 'Classic IDE' });
     
     try {
         await getActiveThreadId(CDP_PORT);
-        msg += '⚡ <b>CDP Otomasyonu:</b> 🟢 AKTİF\n';
+        msg += t('status.cdp_active');
     } catch {
-        msg += '⚡ <b>CDP Otomasyonu:</b> 🔴 PASİF (CDP bağlantısı kurulamadı)\n';
+        msg += t('status.cdp_inactive');
     }
     
-    msg += '🤖 <b>Telegram Bot:</b> 🟢 AKTİF\n';
+    msg += t('status.telegram_bot');
     
     try {
         const activeInfo = await getActiveThreadInfo(CDP_PORT);
         if (activeInfo) {
-            msg += `\n💬 <b>Aktif Sohbet Detayları:</b>\n`;
-            msg += `- Proje Alanı: <code>${activeInfo.workspace}</code>\n`;
-            msg += `- Ajan Başlığı: <code>${activeInfo.name}</code>\n`;
+            msg += t('status.active_chat');
+            msg += t('status.project_area', { workspace: activeInfo.workspace });
+            msg += t('status.agent_title', { name: activeInfo.name });
             const currentModel = await getCurrentModel(CDP_PORT);
-            if (currentModel) msg += `- Seçili Model: <code>${currentModel}</code>\n`;
+            if (currentModel) msg += t('status.selected_model', { model: currentModel });
             const isWorking = await isAgentWorking(CDP_PORT);
-            msg += `- Ajan Durumu: <b>${isWorking ? '🔄 Çalışıyor (Meşgul)' : '💤 Beklemede (Idle)'}</b>\n`;
+            const statusStr = isWorking ? t('status.agent_working') : t('status.agent_idle');
+            msg += t('status.agent_status', { status: statusStr });
         }
     } catch (e) {
         // silently fail if we can't get chat info
@@ -492,7 +495,7 @@ async function getChatHeader(targetId = null, fallback = '') {
                     thName = thName.substring(0, 35) + '...';
                 }
             }
-            return `📁 ${wsName}\n🤖 ${thName}\n<i>(Bu ajanı yanıtlamak için mesajı sola kaydırın)</i>`;
+            return `📁 ${wsName}\n🤖 ${thName}\n${t('agent.swipe_to_reply')}`;
         }
     } catch (_) {}
     return fallback;
@@ -518,7 +521,7 @@ async function buildMainMenu(overrideThread = null, overrideWorkspace = null, ta
         }
     }
     } // end if (!overrideThread && !overrideWorkspace)
-    let modelName = t('menu.model_not_selected') || 'Model Seçilmedi';
+    let modelName = t('menu.model_not_selected');
     try {
         const m = await getCurrentModel(CDP_PORT);
         if (m) {
@@ -551,10 +554,10 @@ async function buildMainMenu(overrideThread = null, overrideWorkspace = null, ta
     return Markup.keyboard([
         [`🤖 ${displayTitle}`, `🧠 ${modelName}`],
         [
-            t('menu.btn_screenshot') || '📸 Ekran', 
-            t('menu.btn_artifacts') || "📦 Artifact'ler", 
-            isTurboMode ? (t('turbo.btn_on') || '🚀 Turbo ✅') : (t('turbo.btn_off') || '🚀 Turbo'), 
-            t('menu.btn_latest') || '💬 Son Yanıt'
+            t('menu.btn_screenshot'), 
+            t('menu.btn_artifacts'), 
+            isTurboMode ? t('turbo.btn_on') : t('turbo.btn_off'), 
+            t('menu.btn_latest')
         ]
     ]).resize();
 }
@@ -571,7 +574,7 @@ async function pushMainMenuToUser(text, silent = false) {
 }
 
 bot.command('start', async (ctx) => {
-    await sendMainMenu(ctx, '👋 Hoşgeldin! Panelin hazır:');
+    await sendMainMenu(ctx, t('menu.welcome'));
 });
 
 const handleLatest = async (ctx) => {
@@ -1323,13 +1326,13 @@ bot.command('app', async (ctx) => {
     const appName = currentApp === 'ide' ? '💻 Classic Monaco IDE' : '🤖 Standalone Agent (2.0)';
     const currentPort = CDP_PORT;
     
-    let msg = `🤖 <b>Antigravity Uygulama Seçimi</b>\n\n`;
-    msg += `Tercih Edilen Uygulama: <b>${appName}</b>\n`;
-    msg += `Aktif CDP Bağlantı Portu: <code>${currentPort}</code>\n\n`;
-    msg += t('app.select_prompt');
+    let msg = t('app.selection_title') || `🤖 <b>Antigravity Uygulama Seçimi</b>\n\n`;
+    msg += t('app.preferred_app', { appName }) + '\n';
+    msg += t('app.active_port', { port: currentPort }) + '\n\n';
+    msg += t('app.select_prompt') + '\n';
     msg += `• <b>Standalone Agent:</b> CDP Port 9333\n`;
     msg += `• <b>Monaco IDE:</b> CDP Port 9334\n\n`;
-    msg += `⚡ <i>Seçiminiz kalıcı olarak .env dosyasına kaydedilir ve botu yeniden başlatmadan anında uygulanır.</i>`;
+    msg += t('app.persistent_selection') || `⚡ <i>Seçiminiz kalıcı olarak .env dosyasına kaydedilir ve botu yeniden başlatmadan anında uygulanır.</i>`;
 
     const buttons = [
         [{ text: '🤖 Standalone Agent (Port: 9333)', callback_data: 'pref_app_agent' }],
@@ -1349,13 +1352,13 @@ bot.action(/pref_app_(.+)/, async (ctx) => {
     if (success) {
         // Recalculate port
         CDP_PORT = getCDPPort();
-        ctx.answerCbQuery(`Uygulama tercihi '${selectedApp}' olarak güncellendi!`);
+        ctx.answerCbQuery(t('app.updated_preference', { app: selectedApp }));
         
         const appName = selectedApp === 'ide' ? '💻 Classic Monaco IDE' : '🤖 Standalone Agent (2.0)';
-        let msg = `✅ <b>Uygulama Tercihi Güncellendi!</b>\n\n`;
-        msg += `Tercih Edilen: <b>${appName}</b>\n`;
-        msg += `Yeni Bağlantı Portu: <code>${CDP_PORT}</code>\n\n`;
-        msg += `Bot şimdi tüm mesaj ve komutlarınızı bu uygulamaya yönlendirecektir.`;
+        let msg = t('app.updated_title');
+        msg += t('app.preferred_app', { appName });
+        msg += t('app.new_port', { port: CDP_PORT });
+        msg += t('app.redirect_info');
         
         ctx.reply(msg, { parse_mode: 'HTML' });
         
@@ -1378,9 +1381,9 @@ bot.action(/pref_app_(.+)/, async (ctx) => {
             autoaccept.enable(CDP_PORT).catch(() => {});
         }
         
-        await sendMainMenu(ctx, `🕹️ Kontrol Paneli (${selectedApp === 'ide' ? 'IDE' : 'Agent'}):`);
+        await sendMainMenu(ctx, t('app.control_panel', { app: selectedApp === 'ide' ? 'IDE' : 'Agent' }));
     } else {
-        ctx.answerCbQuery('Hata: Tercih kaydedilemedi.');
+        ctx.answerCbQuery(t('app.error_save'));
     }
 });
 
@@ -1398,7 +1401,7 @@ bot.command('fix_shortcuts', async (ctx) => {
             const localBin = path.join(os.homedir(), '.local', 'bin');
             const desktop = path.join(os.homedir(), 'Desktop');
             let fixedCount = 0;
-            let status = t('shortcuts.updated_header') || 'Kısayollar güncellendi:\n';
+            let status = t('shortcuts.updated_header');
 
             // Ensure directories exist
             if (!fs.existsSync(localBin)) fs.mkdirSync(localBin, { recursive: true });
@@ -1418,7 +1421,7 @@ bot.command('fix_shortcuts', async (ctx) => {
                 status += `• 💻 <b>Antigravity IDE</b> -> <code>--remote-debugging-port=9334</code> ✅\n`;
                 fixedCount++;
             } else {
-                status += `• 💻 <i>Antigravity IDE</i> (${t('shortcuts.binary_not_found') || 'binary bulunamadı'})\n`;
+                status += `• 💻 <i>Antigravity IDE</i> (${t('shortcuts.binary_not_found')})\n`;
             }
 
             // --- 2. Standalone Agent (Port 9333) ---
@@ -1436,7 +1439,7 @@ bot.command('fix_shortcuts', async (ctx) => {
                 status += `• 🤖 <b>Antigravity Standalone</b> -> <code>--remote-debugging-port=9333</code> ✅\n`;
                 fixedCount++;
             } else {
-                status += `• 🤖 <i>Antigravity Standalone</i> (${t('shortcuts.binary_not_found') || 'binary bulunamadı'})\n`;
+                status += `• 🤖 <i>Antigravity Standalone</i> (${t('shortcuts.binary_not_found')})\n`;
             }
 
             status += t('shortcuts.success', { count: fixedCount });
@@ -1480,7 +1483,7 @@ if (Test-Path $lnkIDE) {
                     return ctx.reply(t('shortcuts.error', { error: err.message }), { parse_mode: 'HTML' });
                 }
                 
-                let status = 'Kısayollar güncellendi:\n';
+                let status = t('shortcuts.updated_header');
                 const output = stdout.toLowerCase();
                 let fixedCount = 0;
                 if (output.includes('agent-fixed')) {
@@ -1508,7 +1511,7 @@ if (Test-Path $lnkIDE) {
             const { execSync } = require('child_process');
             const desktop = path.join(os.homedir(), 'Desktop');
             let fixedCount = 0;
-            let status = 'Kısayollar güncellendi:\n';
+            let status = t('shortcuts.updated');
             
             // 1. Standalone Agent (Port 9333)
             const agentBinary = getAppBinary('agent'); // Uygulamanın .app dizinini döndürür
@@ -1614,7 +1617,7 @@ bot.action(/wn_(.+)/, (ctx) => {
             let buttons = typeof _latestRes === 'string' ? null : _latestRes.buttons;
             
             if (text && !text.startsWith('[No previous')) {
-                const header = await getChatHeader(null, '📋 Son Agent Yanıtı:');
+                const header = await getChatHeader(null, t('latest.last_agent_reply'));
                 await sendLongMessage(ctx, text, header, buttons);
             }
         } catch(_) {}
@@ -1936,18 +1939,18 @@ bot.command('update', async (ctx) => {
         const result = await updater.checkForUpdates();
         if (!result.available) {
             ctx.reply(
-                `✅ Güncelsiniz!\n\nv${result.localVersion} (${result.localCommit})`,
+                t('update.up_to_date', { version: result.localVersion, commit: result.localCommit }),
                 { parse_mode: 'HTML' }
             );
             return;
         }
         await ctx.reply(
-            `🔄 <b>Güncelleme Mevcut!</b>\n\n` +
-            `Mevcut: v${result.localVersion} (${result.localCommit})\n` +
-            `Yeni: v${result.remoteVersion} (${result.remoteCommit})\n` +
-            (result.remoteCommitMessage ? `📝 <b>Changelog:</b> <i>${result.remoteCommitMessage}</i>\n\n` : `\n`) +
-            `<i>💡 Not: Antigravity 2.0 (Standalone App) desteklenir, fakat Antigravity IDE önerilir.</i>\n\n` +
-            `Güncelleniyor...`,
+            t('update.available') +
+            t('update.current_version', { version: result.localVersion, commit: result.localCommit }) +
+            t('update.new_version_info', { version: result.remoteVersion, commit: result.remoteCommit }) +
+            (result.remoteCommitMessage ? t('update.changelog', { message: result.remoteCommitMessage }) : `\n`) +
+            t('update.update_note') +
+            t('update.updating'),
             { parse_mode: 'HTML' }
         );
         const updateResult = await updater.performUpdate();
@@ -1970,10 +1973,10 @@ async function handleTurbo(ctx) {
             turboPinnedMsgId = null;
         }
         saveTurboState();
-        await sendMainMenu(ctx, t('turbo.off') || '🛑 Turbo Mod Kapatıldı.\nNormal asistan moduna dönüldü.');
+        await sendMainMenu(ctx, t('turbo.off'));
     } else {
         const msg = await ctx.reply(
-            t('turbo.on_msg') || '⚡ <b>TURBO MOD AKTİF</b> ⚡\n\n⚠️ <b>Dikkat:</b> Bu modda gönderdiğiniz talepler Claude ve Gemini tarafından sırayla (Planlama -> Kodlama -> İnceleme) işlenecektir. Kodlar kendi aralarında düzenlenip inceleneceği için <b>daha fazla token harcanır.</b>\n\nBu modu kapatmak için tekrar <code>/turbo</code> yazabilir veya menüdeki butona tıklayabilirsiniz.', 
+            t('turbo.on_msg'), 
             { parse_mode: 'HTML' }
         );
         turboPinnedMsgId = msg.message_id;
@@ -2052,7 +2055,10 @@ function extractQuotedContext(ctx) {
     quotedText = quotedText.replace(/✅ Completed!/g, '');
     quotedText = quotedText.replace(/📁[^\n]+/g, '');
     quotedText = quotedText.replace(/🤖[^\n]+/g, '');
-    quotedText = quotedText.replace(/\(Bu ajanı yanıtlamak için mesajı sola kaydırın\)/g, '');
+    const swipeText = t('agent.swipe_to_reply').replace(/<[^>]+>/g, '');
+    if (swipeText) {
+        quotedText = quotedText.replace(new RegExp(swipeText.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi'), '');
+    }
     quotedText = quotedText.replace(/🤖 Agent:/g, '');
     quotedText = quotedText.trim();
     
@@ -2109,7 +2115,7 @@ bot.action(/^ans_(.+)$/, async (ctx) => {
             saveMessageTargetMap(messageTargetMap);
         }
     } catch (e) {
-        ctx.reply('Error: ' + e.message).catch(()=>{});
+        ctx.reply(t('error.general_error', { error: e.message })).catch(()=>{});
     }
 });
 
@@ -2364,12 +2370,12 @@ async function init() {
     setTimeout(() => {
         const updateFlagPath = path.join(__dirname, '..', '.update_flag');
         if (fs.existsSync(updateFlagPath)) {
-            const startupMsg = '🚀 Antigravity Bot başarıyla güncellendi!';
+            const startupMsg = t('update.bot_updated');
             pushMainMenuToUser(startupMsg).catch(console.error);
             try { fs.unlinkSync(updateFlagPath); } catch (e) {}
         } else {
             // Sadece sessizce menüyü güncelle
-            pushMainMenuToUser('🔄 Bot yeniden başlatıldı.', true).catch(console.error);
+            pushMainMenuToUser(t('bot.restarted'), true).catch(console.error);
         }
     }, 3000);
 

@@ -1,10 +1,13 @@
 {
   "bot": {
     "started": "🚀 Antigravity Remote Bot Started!\nChat ID: {chatId}\nType /help to see all available commands.",
-    "polling": "Antigravity Bot is actively polling!"
+    "polling": "Antigravity Bot is actively polling!",
+    "restarted": "🔄 Bot restarted."
   },
   "auth": {
-    "unauthorized": "❌ Unauthorized."
+    "unauthorized": "❌ Unauthorized.",
+    "unauthorized_attempt": "⚠️ <b>Unauthorized Access Attempt!</b>\n\n👤 <b>Person:</b> {name}\n🔖 <b>Username:</b> {username}\n🆔 <b>ID:</b> <code>{id}</code>\n💬 <b>{details}</b>",
+    "anonymous": "Anonymous"
   },
   "help": {
     "title": "🤖 <b>Available Commands:</b>",
@@ -28,22 +31,37 @@
     "window_closed": "✅ Window closed successfully.",
     "window_close_failed": "❌ Failed to close window. Is there an open window?",
     "closed": "✅ IDE fully closed! (All processes and lock files cleaned)",
-    "not_installed": "❌ Antigravity IDE not found. Please install it first.\nSee: https://antigravity.google/"
+    "not_installed": "❌ Antigravity IDE not found. Please install it first.\nSee: https://antigravity.google/",
+    "init_error": "❌ Initialization error: {error}"
   },
   "status": {
     "title": "📊 <b>System Status:</b>\n",
-    "ide_running": "🟢 IDE: Running",
+    "ide_running": "💻 <b>Antigravity IDE (Classic):</b> {status}\n",
     "ide_stopped": "🔴 IDE: Stopped",
-    "cdp_active": "🟢 CDP Connection: Active",
-    "cdp_inactive": "🔴 CDP Connection: Inactive",
+    "cdp_active": "⚡ <b>CDP Automation:</b> 🟢 ACTIVE\n",
+    "cdp_inactive": "⚡ <b>CDP Automation:</b> 🔴 INACTIVE (CDP connection failed)\n",
     "bot_running": "🟢 Bot: Running",
     "autoaccept_on": "✅ ON",
-    "autoaccept_off": "❌ OFF"
+    "autoaccept_off": "❌ OFF",
+    "standalone_running": "🤖 <b>Antigravity Standalone:</b> {status}\n",
+    "running_status": "🟢 RUNNING",
+    "stopped_status": "🔴 CLOSED",
+    "telegram_bot": "🤖 <b>Telegram Bot:</b> 🟢 ACTIVE\n",
+    "active_chat": "\n💬 <b>Active Chat Details:</b>\n",
+    "project_area": "- Project Area: <code>{workspace}</code>\n",
+    "agent_title": "- Agent Title: <code>{name}</code>\n",
+    "selected_model": "- Selected Model: <code>{model}</code>\n",
+    "agent_status": "- Agent Status: <b>{status}</b>\n",
+    "agent_working": "🔄 Working (Busy)",
+    "agent_idle": "💤 Idle",
+    "report_title": "📊 <b>Antigravity Bot Status Report</b>\n\n",
+    "preferred_app_status": "🎯 <b>Preferred App:</b> <code>{app}</code>\n\n"
   },
   "latest": {
     "title": "📝 Latest Response:\n\n",
     "no_new": "[No new messages]",
-    "error": "❌ Error: {error}\n(Is Antigravity open?)"
+    "error": "❌ Error: {error}\n(Is Antigravity open?)",
+    "last_agent_reply": "📋 Last Agent Reply:"
   },
   "screenshot": {
     "taking": "📸 Taking IDE screenshot (via CDP)...",
@@ -141,7 +159,10 @@
     "btn_latest": "💬 Latest",
     "start_ag_desc": "Start Agent",
     "close_ide_desc": "Close IDE",
-    "close_ag_desc": "Close Agent"
+    "close_ag_desc": "Close Agent",
+    "welcome": "👋 Welcome! Your panel is ready:",
+    "btn_on": "Turn On",
+    "btn_off": "Turn Off"
   },
   "photo": {
     "downloaded": "✅ File downloaded and forwarding to agent...",
@@ -213,7 +234,7 @@
   },
   "turbo": {
     "off": "🛑 Turbo Mode Disabled.\nReturned to normal assistant mode.",
-    "on_msg": "⚡ <b>TURBO MODE ACTIVE</b> ⚡\n\n⚠️ <b>Note:</b> In this mode, your requests will be processed sequentially by Claude and Gemini (Planning -> Coding -> Review). Since codes will be reviewed and edited between agents, <b>more tokens will be consumed.</b>\n\nTo disable this mode, type <code>/turbo</code> again or click the menu button.",
+    "on_msg": "⚡ <b>TURBO MODE ACTIVE</b> ⚡\n\n⚠️ <b>Attention:</b> In this mode, your requests will be processed sequentially by Claude and Gemini (Planning -> Coding -> Review). Because the models will edit and review each other's code, <b>more tokens will be consumed.</b>\n\nTo disable this mode, you can type <code>/turbo</code> again or click the button in the menu.",
     "on_toast": "🚀 Turbo Mode enabled!",
     "btn_on": "🚀 Turbo ✅",
     "btn_off": "🚀 Turbo",
@@ -261,18 +282,55 @@
   "app": {
     "select_prompt": "Please select the application you want to control. Both applications can run simultaneously and are controlled via independent ports:\n",
     "auto_starting": "🚀 {appName} appears to be closed. Auto-starting...",
-    "started": "✅ {appName} started successfully."
+    "started": "✅ {appName} started successfully.",
+    "updated_preference": "App preference updated to '{app}'!",
+    "selection_title": "🤖 <b>Antigravity App Selection</b>\n\n",
+    "preferred_app": "Preferred App: <b>{appName}</b>\n",
+    "active_port": "Active CDP Connection Port: <code>{port}</code>\n\n",
+    "persistent_selection": "⚡ <i>Your selection is permanently saved to the .env file and applied instantly without restarting the bot.</i>",
+    "updated_title": "✅ <b>App Preference Updated!</b>\n\n",
+    "new_port": "New Connection Port: <code>{port}</code>\n\n",
+    "redirect_info": "The bot will now redirect all your messages and commands to this app.",
+    "control_panel": "🕹️ Control Panel ({app}):",
+    "error_save": "Error: Could not save preference."
   },
   "shortcuts": {
     "scanning": "⏳ Scanning and updating desktop shortcuts, please wait...",
     "error": "❌ Error occurred while updating shortcuts:\n<code>{error}</code>",
     "not_found": "Not found on desktop or could not be changed",
     "success": "\n✨ <b>Success!</b> A total of <b>{count}</b> shortcuts updated. The bot will now be able to automatically connect when you launch applications from the desktop.",
-    "start_error": "❌ Process could not be started: {error}"
+    "start_error": "❌ Process could not be started: {error}",
+    "updated_header": "Shortcuts updated:\n",
+    "binary_not_found": "binary not found",
+    "updated": "Shortcuts updated:\n"
   },
   "update": {
     "checking": "🔍 Checking for updates...",
     "error": "❌ Update error: {error}",
-    "success": "✅ Code updated and dependencies installed.\nBot is restarting now..."
+    "success": "✅ Code updated and dependencies installed.\nBot is restarting now...",
+    "bot_updated": "🚀 Antigravity Bot successfully updated!",
+    "up_to_date": "✅ You are up to date!\n\nv{version} ({commit})",
+    "available": "🔄 <b>Update Available!</b>\n\n",
+    "new_version": "🚀 New version: <code>{remote}</code>",
+    "click_to_download": "⬇️ Click to download: /update",
+    "current_version": "Current: v{version} ({commit})\n",
+    "new_version_info": "New: v{version} ({commit})\n",
+    "changelog": "📝 <b>Changelog:</b> <i>{message}</i>\n\n",
+    "update_note": "<i>💡 Note: Antigravity 2.0 (Standalone App) is supported, but Antigravity IDE is recommended.</i>\n\n",
+    "updating": "Updating..."
+  },
+  "error": {
+    "start_error": "❌ Start error: {error}",
+    "general_error": "❌ Error: {error}"
+  },
+  "agent": {
+    "swipe_to_reply": "<i>(Swipe message to the left to reply to this agent)</i>"
+  },
+  "interactive_modal": {
+    "default_header": "Agent Pending Approval / Question:",
+    "options_prompt": "_(You can select one of the buttons below or type your answer)_",
+    "confirm_prompt": "_(Please use the 'confirm' button to approve or 'reject' to cancel)_",
+    "btn_confirm": "Confirm",
+    "btn_reject": "Reject"
   }
 }
