@@ -586,6 +586,13 @@ async function buildMainMenu(overrideThread = null, overrideWorkspace = null, ta
 
 async function sendMainMenu(ctx, text = '🕹️ Kontrol Paneli:', overrideThread = null, overrideWorkspace = null, targetId = null) {
     const kb = await buildMainMenu(overrideThread, overrideWorkspace, targetId);
+    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+        return ctx.editMessageText(text, kb).catch(e => {
+            if (!e.message.includes('message is not modified')) {
+                return ctx.reply(text, kb);
+            }
+        });
+    }
     return ctx.reply(text, kb);
 }
 
@@ -1056,7 +1063,12 @@ bot.action(/md_(.+)/, async (ctx) => {
     try {
         const modelName = Buffer.from(ctx.match[1], 'base64').toString('utf-8');
         ctx.answerCbQuery(modelName);
-        ctx.reply(t('model.changing', { model: modelName }));
+        const changingText = t('model.changing', { model: modelName });
+        if (ctx.callbackQuery && ctx.callbackQuery.message) {
+            await ctx.editMessageText(changingText).catch(()=>{});
+        } else {
+            await ctx.reply(changingText);
+        }
         const success = await selectModel(CDP_PORT, modelName);
         if (success) await sendMainMenu(ctx, t('model.changed', { model: modelName }));
         else ctx.reply(t('model.select_failed'));
@@ -1182,7 +1194,15 @@ bot.action('aa_status', async (ctx) => {
         if (status.lastClickText && status.lastClickTimeSec !== null) {
             msg += t('autoaccept.status_last_click', { text: status.lastClickText, sec: status.lastClickTimeSec }) + '\n';
         }
-        ctx.reply(msg, { parse_mode: 'HTML' });
+        
+        if (ctx.callbackQuery && ctx.callbackQuery.message) {
+            const kb = ctx.callbackQuery.message.reply_markup;
+            ctx.editMessageText(msg, { parse_mode: 'HTML', reply_markup: kb }).catch(e => {
+                if (!e.message.includes('message is not modified')) ctx.reply(msg, { parse_mode: 'HTML' });
+            });
+        } else {
+            ctx.reply(msg, { parse_mode: 'HTML' });
+        }
     } catch (e) {
         ctx.reply(t('autoaccept.error', { error: e.message }));
     }
@@ -1664,7 +1684,14 @@ bot.command('window', async (ctx) => {
 bot.action('wn_auto', (ctx) => {
     setPreferredWindow(null);
     ctx.answerCbQuery(t('window.cleared_toast') || 'Cleared — using auto-detect');
-    ctx.reply(t('window.cleared_msg') || '🔄 Window preference cleared. Bot will auto-detect the active IDE window.');
+    const text = t('window.cleared_msg') || '🔄 Window preference cleared. Bot will auto-detect the active IDE window.';
+    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+        ctx.editMessageText(text).catch(e => {
+            if (!e.message.includes('message is not modified')) ctx.reply(text);
+        });
+    } else {
+        ctx.reply(text);
+    }
 });
 
 bot.action(/wn_(.+)/, (ctx) => {
@@ -1682,7 +1709,15 @@ bot.action(/wn_(.+)/, (ctx) => {
     setPreferredWindow(selected.id);
     const shortTitle = selected.title.substring(0, 30);
     ctx.answerCbQuery(t('window.selected_toast', { title: shortTitle }) || `Selected: ${shortTitle}`);
-    ctx.reply(t('window.selected_msg', { title: selected.title }) || `✅ Now targeting: <b>${selected.title}</b>\n\nAll commands will route to this window.`, { parse_mode: 'HTML' });
+    
+    const text = t('window.selected_msg', { title: selected.title }) || `✅ Now targeting: <b>${selected.title}</b>\n\nAll commands will route to this window.`;
+    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+        ctx.editMessageText(text, { parse_mode: 'HTML' }).catch(e => {
+            if (!e.message.includes('message is not modified')) ctx.reply(text, { parse_mode: 'HTML' });
+        });
+    } else {
+        ctx.reply(text, { parse_mode: 'HTML' });
+    }
     
     // Auto-show latest agent response from the new window
     (async () => {
@@ -1786,10 +1821,21 @@ function listDirectory(ctx, dirPath, page = 0) {
         
         const relativePath = dirPath.replace(config.home, '~');
         const dirInfo = t('file.dir_info', { count: filtered.length, page: page + 1, totalPages: totalPages || 1 });
-        ctx.reply(`📂 <b>${relativePath}</b>\n${dirInfo}`, {
+        const text = `📂 <b>${relativePath}</b>\n${dirInfo}`;
+        const extra = {
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: buttons }
-        });
+        };
+        
+        if (ctx.callbackQuery && ctx.callbackQuery.message) {
+            ctx.editMessageText(text, extra).catch(e => {
+                if (!e.message.includes('message is not modified')) {
+                    ctx.reply(text, extra);
+                }
+            });
+        } else {
+            ctx.reply(text, extra);
+        }
     });
 }
 
