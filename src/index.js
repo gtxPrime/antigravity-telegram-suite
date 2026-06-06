@@ -2646,19 +2646,46 @@ async function init() {
     const preferredApp = (process.env.ANTIGRAVITY_PREFERRED_APP || 'ide').toLowerCase();
     const appDataName = preferredApp === 'agent' ? 'antigravity' : 'antigravity-ide';
     
+    // Track last proactive notification message per chat for edit-in-place
+    const proactiveMessageIds = new Map(); // chatId -> { messageId, timestamp }
+    const PROACTIVE_RESET_MS = 5 * 60 * 1000; // Reset after 5 min of silence
+
     const taskWatcher = new TaskWatcher({
         appDataName,
         onNotification: async ({ conversationId, text, type }) => {
             console.log(`[TaskWatcher] 📬 Proactive notification (${type}, conv: ${conversationId?.substring(0, 8)}, ${text.length} chars)`);
 
+            const header = '🔔 <b>' + t('task_watcher.proactive_msg') + '</b>\n\n';
+            // Truncate for Telegram 4096 char limit
+            const maxLen = 4096 - header.length - 10;
+            const body = text.length > maxLen ? text.substring(0, maxLen) + '…' : text;
+            const fullMsg = header + body;
+
             for (const chatId of ALLOWED_CHAT_IDS) {
                 try {
-                    const header = '🔔 <b>' + t('task_watcher.proactive_msg') + '</b>\n\n';
-                    const fakeCtx = {
-                        reply: (msg, opts) => bot.telegram.sendMessage(chatId, msg, opts),
-                        chat: { id: chatId }
-                    };
-                    await sendLongMessage(fakeCtx, text, header);
+                    const existing = proactiveMessageIds.get(chatId);
+                    const now = Date.now();
+
+                    // If we have a recent message, try to edit it
+                    if (existing && (now - existing.timestamp) < PROACTIVE_RESET_MS) {
+                        try {
+                            await bot.telegram.editMessageText(
+                                chatId, existing.messageId, null,
+                                fullMsg, { parse_mode: 'HTML' }
+                            );
+                            existing.timestamp = now;
+                            console.log(`[TaskWatcher] Edited existing notification msg ${existing.messageId}`);
+                            continue;
+                        } catch (editErr) {
+                            // Edit failed (message too old, deleted, or content unchanged)
+                            console.log(`[TaskWatcher] Edit failed, sending new: ${editErr.message}`);
+                        }
+                    }
+
+                    // Send a new message
+                    const sent = await bot.telegram.sendMessage(chatId, fullMsg, { parse_mode: 'HTML' });
+                    proactiveMessageIds.set(chatId, { messageId: sent.message_id, timestamp: now });
+                    console.log(`[TaskWatcher] Sent new notification msg ${sent.message_id}`);
                 } catch (e) {
                     console.error('[TaskWatcher] Failed to send notification:', e.message);
                 }
