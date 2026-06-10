@@ -48,3 +48,6 @@ GEMINI.md
 
 # Local development
 antigravity-bot-pro/
+
+# CronCrew schedule client (not ready for production)
+src/schedule_client.js

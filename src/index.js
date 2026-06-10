@@ -11,7 +11,12 @@ const autoaccept = require('./autoaccept');
 const updater = require('./updater');
 const { runTurboOrchestration } = require('./turbo_orchestrator');
 const TaskWatcher = require('./task_watcher');
-const scheduleClient = require('./schedule_client');
+let scheduleClient = null;
+try {
+    scheduleClient = require('./schedule_client');
+} catch (e) {
+    console.log('[CronCrew] schedule_client.js not found — schedule features disabled.');
+}
 
 const TURBO_STATE_FILE = path.join(os.homedir(), '.gemini', 'antigravity', 'turbo_state.json');
 const RESTART_FLAG_FILE = path.join(os.homedir(), '.gemini', 'antigravity', '.restart_pending');
@@ -853,6 +858,7 @@ bot.command('schedule_task', async (ctx) => {
 // ===== CRONCREW SCHEDULE MANAGEMENT =====
 
 bot.command('schedule_setup', async (ctx) => {
+    if (!scheduleClient) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
     const parts = ctx.message.text.split(' ');
     parts.shift();
     if (parts.length < 2) return ctx.reply(t('schedule.setup_usage'), { parse_mode: 'HTML' });
@@ -872,7 +878,7 @@ bot.command('schedule_setup', async (ctx) => {
 });
 
 bot.command('schedule_status', async (ctx) => {
-    if (!scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
+    if (!scheduleClient || !scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
     
     setReaction(ctx, REACTION.THINKING);
     try {
@@ -898,7 +904,7 @@ bot.command('schedule_status', async (ctx) => {
 });
 
 bot.command('schedule_list', async (ctx) => {
-    if (!scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
+    if (!scheduleClient || !scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
     
     setReaction(ctx, REACTION.THINKING);
     try {
@@ -939,7 +945,7 @@ bot.command('schedule_list', async (ctx) => {
 });
 
 bot.command('schedule_add', async (ctx) => {
-    if (!scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
+    if (!scheduleClient || !scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
     
     const parts = ctx.message.text.split(' ');
     parts.shift();
@@ -970,7 +976,7 @@ bot.command('schedule_add', async (ctx) => {
 });
 
 bot.command('schedule_del', async (ctx) => {
-    if (!scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
+    if (!scheduleClient || !scheduleClient.isConfigured()) return ctx.reply(t('schedule.not_configured'), { parse_mode: 'HTML' });
     
     const parts = ctx.message.text.split(' ');
     parts.shift();
@@ -991,6 +997,7 @@ bot.command('schedule_del', async (ctx) => {
 
 // Schedule inline button actions
 bot.action(/^sch_run_(.+)$/, async (ctx) => {
+    if (!scheduleClient) return ctx.answerCbQuery('Schedule not available', { show_alert: true });
     const scheduleId = ctx.match[1];
     ctx.answerCbQuery('Running...');
     try {
@@ -1009,6 +1016,7 @@ bot.action(/^sch_run_(.+)$/, async (ctx) => {
 });
 
 bot.action(/^sch_pause_(.+)$/, async (ctx) => {
+    if (!scheduleClient) return ctx.answerCbQuery('Schedule not available', { show_alert: true });
     const scheduleId = ctx.match[1];
     ctx.answerCbQuery('Pausing...');
     try {
@@ -1020,6 +1028,7 @@ bot.action(/^sch_pause_(.+)$/, async (ctx) => {
 });
 
 bot.action(/^sch_resume_(.+)$/, async (ctx) => {
+    if (!scheduleClient) return ctx.answerCbQuery('Schedule not available', { show_alert: true });
     const scheduleId = ctx.match[1];
     ctx.answerCbQuery('Resuming...');
     try {
@@ -1031,6 +1040,7 @@ bot.action(/^sch_resume_(.+)$/, async (ctx) => {
 });
 
 bot.action(/^sch_del_(.+)$/, async (ctx) => {
+    if (!scheduleClient) return ctx.answerCbQuery('Schedule not available', { show_alert: true });
     const scheduleId = ctx.match[1];
     ctx.answerCbQuery('Deleting...');
     try {
