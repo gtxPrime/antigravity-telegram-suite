@@ -1591,6 +1591,7 @@ function doLaunchWorkspace(ctx, workspace) {
                         if (autoaccept.isEnabled) {
                             autoaccept.enable(CDP_PORT).catch(() => {});
                         }
+                        await triggerNewChat(CDP_PORT);
                         await sendMainMenu(ctx, t('workspace.started') || '📁 Workspace switched successfully!');
                         return;
                     }
@@ -1608,6 +1609,7 @@ function doLaunchWorkspace(ctx, workspace) {
                         if (autoaccept.isEnabled) {
                             autoaccept.enable(CDP_PORT).catch(() => {});
                         }
+                        await triggerNewChat(CDP_PORT);
                         await sendMainMenu(ctx, t('workspace.started') || '📁 Workspace switched successfully!');
                         return;
                     }
@@ -2695,6 +2697,11 @@ async function processAgentRequest(ctx, query, explicitTargetId, explicitThreadN
     setReaction(ctx, REACTION.THINKING);
     if (explicitThreadName) await switchAgentThread(CDP_PORT, explicitThreadName).catch(()=>{});
     const targetId = await sendViaCDP(query, CDP_PORT, explicitTargetId);
+    
+    if (targetId === "INVALID_MODAL_OPTION") {
+        ctx.reply("❌ Şu anda aktif bir soru paneli (modal) açık. Lütfen seçeneklerden birini girin veya iptal etmek için /stop komutunu kullanın. (Görsel veya serbest metin bu soru için geçerli değil)");
+        return;
+    }
 
     // Wait briefly for message to render in DOM before anchoring state
     await new Promise(r => setTimeout(r, 1500));

@@ -634,14 +634,52 @@ async function getInteractiveModalState(port, specificTargetId = null) {
             const res = await Runtime.evaluate({
                 expression: `(() => {
                     const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"], .interactive-session') || document;
-                    const isModal = !!container.querySelector('textarea[placeholder*="Other" i], textarea[placeholder*="answer" i], input[type="radio"], input[type="checkbox"], [data-testid="interactive-modal"]');
+                    const isModal = !!container.querySelector('textarea[placeholder*="Other" i], textarea[placeholder*="answer" i], input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], select, [data-testid="interactive-modal"]');
                     if (!isModal) return null;
                     
-                    const headerEl = container.querySelector('h2, h3.font-medium, .modal-header');
-                    const header = (headerEl && headerEl.textContent.trim()) || t('interactive_modal.default_header');
+                    let headerEl = container.querySelector('.modal-header, [data-testid="interactive-modal"] h2, h3.font-medium, fieldset legend');
+                    if (container !== document) {
+                        headerEl = headerEl || container.querySelector('h2, h3, p.text-base, p.mb-4, p.text-sm');
+                    } else {
+                        headerEl = headerEl || document.querySelector('.chat-container h2, #conversation h2, .interactive-session h2, .interactive-session p');
+                    }
+                    let header = (headerEl && headerEl.textContent.trim());
                     
                     const labels = Array.from(container.querySelectorAll('label'));
-                    const options = labels.map(l => (l.innerText || l.textContent).trim().replace(/^\\d+\\s*\\n?/, '')).filter(t => t && !t.match(/^(Other|Other \\(write your answer\\)|\\d+)$/i));
+                    let options = labels.map(l => (l.innerText || l.textContent).trim().replace(/^\\d+\\s*\\n?/, '')).filter(t => t && !t.match(/^(Other|Other \\(write your answer\\)|\\d+)$/i));
+                    
+                    if (options.length === 0) {
+                        const items = Array.from(container.querySelectorAll('[role="radio"], [role="checkbox"]'));
+                        options = items.map(el => (el.innerText || el.textContent).trim()).filter(Boolean);
+                    }
+                    
+                    if (!header && options.length > 0) {
+                        const firstLabel = container.querySelector('label, [role="radio"], [role="checkbox"]');
+                        if (firstLabel) {
+                            let walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT, null);
+                            let textNodesBeforeLabel = [];
+                            let node;
+                            while(node = walker.nextNode()) {
+                                // Stop when we reach the first option
+                                if (node === firstLabel) break;
+                                // Ignore if it's a parent container of the label
+                                if (node.contains(firstLabel)) continue;
+                                
+                                if (node.tagName === 'P' || node.tagName === 'H2' || node.tagName === 'H3' || node.tagName === 'H4') {
+                                    textNodesBeforeLabel.push(node);
+                                }
+                            }
+                            
+                            for (let i = textNodesBeforeLabel.length - 1; i >= 0; i--) {
+                                const text = textNodesBeforeLabel[i].textContent.trim();
+                                if (text && text.length > 3) {
+                                    header = text.split('\\n').pop().trim();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    header = header || 'Agent Question';
                     
                     return { header, options };
                 })()`,
@@ -891,6 +929,9 @@ async function waitForAgentResponse(port, timeoutMs = 450000, onProgress = null,
                     expression: `
                         ${UI_LOCATORS_SCRIPT}
                         (function() {
+                            const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"], .interactive-session') || document;
+                            const isModal = !!container.querySelector('textarea[placeholder*="Other" i], textarea[placeholder*="answer" i], input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], select, [data-testid="interactive-modal"]');
+                            
                             const isGenerating = !!AG_UI.getStopButton();
                             const editor = AG_UI.getChatInput();
                             const isInputDisabled = editor ? (editor.getAttribute('contenteditable') === 'false' || editor.disabled) : false;
@@ -908,9 +949,9 @@ async function waitForAgentResponse(port, timeoutMs = 450000, onProgress = null,
                                 });
                             }
                             
-                            const isIdle = !isGenerating && !isInputDisabled && !isSpinning && !hasPendingButton;
+                            const isIdle = !isGenerating && (!isInputDisabled || isModal) && !isSpinning && !hasPendingButton;
                             const hasChat = !!AG_UI.getVisibleChatContainer();
-                            return { hasChat, isGenerating, isIdle, isSpinning, hasPendingButton };
+                            return { hasChat, isGenerating, isIdle, isSpinning, hasPendingButton, isModal };
                         })()
                     `,
                     returnByValue: true
@@ -1008,12 +1049,14 @@ async function sendViaCDP(text, port, specificTargetId = null) {
                         try {
                             const escapedText = ${JSON.stringify(text)};
                             
-                            // Check for radio/checkbox modal options by index
-                            const optIndex = parseInt(escapedText) - 1;
-                            if (!Number.isNaN(optIndex) && optIndex >= 0 && escapedText.match(/^\\d+$/)) {
-                                const container = document.querySelector('.antigravity-agent-side-panel, [role="dialog"]') || document;
-                                const radios = Array.from(container.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
-                                if (radios.length > 0 && optIndex < radios.length) {
+                            // Check if an interactive modal is active
+                            const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"]') || document;
+                            const radios = Array.from(container.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"]'));
+                            
+                            if (radios.length > 0) {
+                                // Check for radio/checkbox modal options by index
+                                const optIndex = parseInt(escapedText) - 1;
+                                if (!Number.isNaN(optIndex) && optIndex >= 0 && escapedText.match(/^\\d+$/) && optIndex < radios.length) {
                                     radios[optIndex].click();
                                     const allBtns = Array.from(container.querySelectorAll('button'));
                                     const sb = allBtns.find(b => {
@@ -1023,6 +1066,29 @@ async function sendViaCDP(text, port, specificTargetId = null) {
                                     if (sb) setTimeout(() => sb.click(), 50);
                                     return { found: true, method: 'radio', target: '${target.title?.substring(0, 30) || 'unknown'}' };
                                 }
+                                
+                                // Not a valid radio index. Does it have a write-in input?
+                                const writeIn = container.querySelector('textarea:not([disabled]), input[type="text"]:not([disabled])');
+                                if (writeIn && writeIn.offsetParent !== null) {
+                                    writeIn.focus();
+                                    const setter = Object.getOwnPropertyDescriptor(writeIn.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')?.set;
+                                    if (setter) setter.call(writeIn, escapedText);
+                                    else writeIn.value = escapedText;
+                                    
+                                    writeIn.dispatchEvent(new Event('input', { bubbles: true }));
+                                    writeIn.dispatchEvent(new Event('change', { bubbles: true }));
+                                    
+                                    const allBtns = Array.from(container.querySelectorAll('button'));
+                                    const sb = allBtns.find(b => {
+                                        const t = (b.textContent || '').trim().toLowerCase();
+                                        return t === 'submit' || t.startsWith('submit') || t === 'gönder' || t === 'approve' || t === 'allow';
+                                    });
+                                    if (sb) setTimeout(() => sb.click(), 50);
+                                    return { found: true, method: 'write-in', target: '${target.title?.substring(0, 30) || 'unknown'}' };
+                                }
+                                
+                                // No write-in input, and not a valid radio. DO NOT SUBMIT!
+                                return { found: false, reason: "invalid_modal_option", method: "modal_rejected" };
                             }
                             
                             // Use the robust centralized locator to find the actual chat input
@@ -1108,6 +1174,9 @@ async function sendViaCDP(text, port, specificTargetId = null) {
                 await client.close();
                 console.log(`sendViaCDP: Successfully sent via ${val.method} on "${target.title?.substring(0, 40)}"`);
                 return target.id;
+            } else if (val && val.reason === "invalid_modal_option") {
+                await client.close();
+                return "INVALID_MODAL_OPTION";
             }
             
             if (val) errors.push(`${target.title?.substring(0, 25)}: ${val.reason || 'no_editor'}`);
@@ -1151,13 +1220,24 @@ async function triggerNewChat(port) {
                             });
                             
                             if (targetCard) {
-                                const parent = targetCard.closest('[role="button"]') || targetCard.parentElement;
-                                if (parent) {
-                                    const plusIcon = parent.querySelector('button[aria-label*="New" i], svg.lucide-plus, svg.lucide-message-square-plus, svg[class*="plus"]');
-                                    const plusBtn = plusIcon?.closest('button, [role="button"], a') || plusIcon?.parentElement || plusIcon;
-                                    if (plusBtn && typeof plusBtn.click === 'function') {
-                                        plusBtn.click();
-                                        return { clicked: true, tag: plusBtn.tagName, type: 'workspace-specific' };
+                                const plusIcon = targetCard.querySelector('button[aria-label*="New" i], svg.lucide-plus, svg.lucide-message-square-plus, svg[class*="plus"]') || 
+                                                 targetCard.querySelector('path[d="M450-450H220v-60H450V-740h60v230H740v60H510v230H450V-450Z"]');
+                                const plusBtn = plusIcon?.closest('button, [role="button"], a') || (plusIcon && plusIcon.parentElement);
+                                
+                                if (plusBtn && typeof plusBtn.click === 'function') {
+                                    plusBtn.click();
+                                    return { clicked: true, tag: plusBtn.tagName, type: 'workspace-specific' };
+                                } else {
+                                    // Fallback: targetCard might be a link or have its own click behavior 
+                                    // if there's no explicitly separated + button but we expect workspace to activate
+                                    const parent = targetCard.closest('[role="button"]') || targetCard.parentElement;
+                                    if (parent) {
+                                        const pPlusIcon = parent.querySelector('button[aria-label*="New" i], svg.lucide-plus, svg.lucide-message-square-plus, svg[class*="plus"]');
+                                        const pPlusBtn = pPlusIcon?.closest('button, [role="button"], a') || pPlusIcon?.parentElement || pPlusIcon;
+                                        if (pPlusBtn && typeof pPlusBtn.click === 'function') {
+                                            pPlusBtn.click();
+                                            return { clicked: true, tag: pPlusBtn.tagName, type: 'workspace-specific-parent' };
+                                        }
                                     }
                                 }
                             }
@@ -1920,6 +2000,9 @@ async function isAgentWorking(port, specificTargetId = null) {
                 expression: `
                     ${UI_LOCATORS_SCRIPT}
                     (function() {
+                        const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"], .interactive-session') || document;
+                        const isModal = !!container.querySelector('textarea[placeholder*="Other" i], textarea[placeholder*="answer" i], input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"], select, [data-testid="interactive-modal"]');
+
                         const isGenerating = !!AG_UI.getStopButton();
                         const editor = AG_UI.getChatInput();
                         const isInputDisabled = editor ? (editor.getAttribute('contenteditable') === 'false' || editor.disabled) : false;
@@ -1936,7 +2019,7 @@ async function isAgentWorking(port, specificTargetId = null) {
                             });
                         }
                         
-                        return isGenerating || isInputDisabled || isSpinning || hasPendingButton;
+                        return isGenerating || (!isModal && isInputDisabled) || isSpinning || hasPendingButton;
                     })()
                 `,
                 returnByValue: true
@@ -2245,10 +2328,22 @@ async function stopAgent(port) {
                 expression: `
                     ${UI_LOCATORS_SCRIPT}
                     (() => {
+                        // First try the real stop button (agent generating)
                         const btn = AG_UI.getStopButton();
                         if (btn) {
                             btn.click();
-                            return { stopped: true };
+                            return { stopped: true, method: 'stop' };
+                        }
+                        // Fallback: if an interactive modal is open, click Skip/Atla
+                        const chatArea = AG_UI.getVisibleChatContainer() || document;
+                        const allBtns = Array.from(chatArea.querySelectorAll('button')).filter(b => b.offsetParent !== null);
+                        const skipBtn = allBtns.find(b => {
+                            const t = (b.textContent || '').trim().toLowerCase();
+                            return t === 'skip' || t === 'atla';
+                        });
+                        if (skipBtn) {
+                            skipBtn.click();
+                            return { stopped: true, method: 'skip' };
                         }
                         return { stopped: false };
                     })()
