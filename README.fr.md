@@ -342,6 +342,7 @@ Utilisez `/app` pour basculer le bot entre les applications. Le paramètre `ANTI
 
 ## 🙏 Remerciements
 
+- **[ATX-AI-Dev](https://github.com/ATX-AI-Dev)** — PR #8: Standalone App support, Watchdog agent, and dynamic model fetching
 - **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — Pour la prise en charge multi-fenêtres !
 - **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — Pour les localisateurs UI de l'Agent Manager !
 - **[mine260309](https://github.com/mine260309)** — Traductions i18n pour les messages en dur

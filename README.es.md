@@ -342,6 +342,7 @@ Utiliza `/app` para cambiar el enfoque del bot entre las aplicaciones. La config
 
 ## 🙏 Agradecimientos
 
+- **[ATX-AI-Dev](https://github.com/ATX-AI-Dev)** — PR #8: Standalone App support, Watchdog agent, and dynamic model fetching
 - **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — ¡Por la característica de Soporte Multi-Ventana!
 - **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — ¡Por los localizadores de UI del Agent Manager para la gestión de hilos!
 - **[mine260309](https://github.com/mine260309)** — Traducciones i18n para mensajes hardcodeados

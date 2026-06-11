@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-06-11
+
+### Added
+- **Standalone App Support**: Introduced full support for Standalone Antigravity App via new DOM traversal and workspace switching strategies.
+- **Watchdog Monitoring**: Replaced direct `npm start` execution with a robust `watchdog.js` process monitor that automatically detects crash loops and force-restarts frozen bots.
+- **Dynamic Model Retrieval**: The `/model` command now dynamically fetches the list of available AI models directly from the UI, removing the need to update the bot when new models are released.
+- **Heartbeat Mechanism**: Added a `.heartbeat` file to ensure the bot is actively running and responsive, managed by the new Watchdog.
+- **Windows Start/Stop Scripts**: Added `start_bot.bat` and `stop_bot.bat` helper scripts for easier management on Windows.
+
+### Changed
+- **Auto-Update Architecture**: The `/update` command now uses a safer `git stash` + `git merge` strategy instead of `git reset --hard`, protecting local modifications while intelligently merging remote updates.
+
+### Fixed
+- **Standalone App DOM Locators**: Fallback selectors added to `ui_locators.js` to ensure the bot can successfully interact with newer versions of the Standalone App.
+- **Locales Sync**: Updated and validated all 309 translation keys across `en`, `tr`, `de`, `es`, and `fr` locales.
+
 ## [3.4.0] - 2026-06-07
 
 ### Added

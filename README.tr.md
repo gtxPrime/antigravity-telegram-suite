@@ -316,6 +316,7 @@ Bot eşzamanlı çalışan **iki Antigravity uygulamasını** destekler:
 
 ## 🙏 Teşekkürler
 
+- **[ATX-AI-Dev](https://github.com/ATX-AI-Dev)** — PR #8: Standalone App desteği, Watchdog aracı ve dinamik model listesi
 - **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — Çoklu Pencere Desteği özelliği
 - **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — Thread yönetimi için Agent Manager UI Locators
 - **[mine260309](https://github.com/mine260309)** — Sabit kodlanmış mesajlar için i18n çevirileri

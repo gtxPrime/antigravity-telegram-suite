@@ -342,6 +342,7 @@ Verwende `/app`, um den Fokus des Bots zwischen den Apps zu wechseln. Die Einste
 
 ## 🙏 Danksagungen
 
+- **[ATX-AI-Dev](https://github.com/ATX-AI-Dev)** — PR #8: Standalone App support, Watchdog agent, and dynamic model fetching
 - **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — Für die Multi-Window-Unterstützung
 - **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — Für die Agent Manager UI Locators zur Thread-Verwaltung
 - **[mine260309](https://github.com/mine260309)** — i18n-Übersetzungen für hartcodierte Nachrichten

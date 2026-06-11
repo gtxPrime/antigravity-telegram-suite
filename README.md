@@ -342,6 +342,7 @@ Use `/app` to switch the bot's focus between apps. The `ANTIGRAVITY_PREFERRED_AP
 
 ## 🙏 Acknowledgments
 
+- **[ATX-AI-Dev](https://github.com/ATX-AI-Dev)** — PR #8: Standalone App support, Watchdog agent, and dynamic model fetching
 - **[yvg](https://github.com/yvg/antigravity-telegram-suite)** — Multi-Window Support feature
 - **[achshar](https://github.com/achshar/antigravity-telegram-suite)** — Agent Manager UI locators for thread management
 - **[mine260309](https://github.com/mine260309)** — i18n translations for hardcoded messages
