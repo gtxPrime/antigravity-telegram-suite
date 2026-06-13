@@ -678,6 +678,12 @@ async function getInteractiveModalState(port, specificTargetId = null) {
                                 }
                             }
                         }
+                        
+                        if (!header) {
+                            const pTags = Array.from(container.querySelectorAll('p, .text-sm, .text-base'));
+                            const text = pTags.map(p => p.textContent.trim()).filter(t => t.length > 5).join('\\n');
+                            if (text) header = text;
+                        }
                     }
                     header = header || 'Agent Question';
                     
@@ -1050,8 +1056,30 @@ async function sendViaCDP(text, port, specificTargetId = null) {
                             const escapedText = ${JSON.stringify(text)};
                             
                             // Check if an interactive modal is active
-                            const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"]') || document;
+                            const container = document.querySelector('.antigravity-agent-side-panel, .modal, [role="dialog"], [data-testid="interactive-modal"]') || document;
                             const radios = Array.from(container.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"]'));
+                            
+                            const isModalActive = container !== document || radios.length > 0;
+                            const isConfirmAction = escapedText.toLowerCase() === 'onayla' || escapedText.toLowerCase() === 'confirm';
+                            const isRejectAction = escapedText.toLowerCase() === 'reddet' || escapedText.toLowerCase() === 'reject';
+                            
+                            if (isModalActive && (isConfirmAction || isRejectAction)) {
+                                const allBtns = Array.from(container.querySelectorAll('button'));
+                                const btnTarget = isConfirmAction 
+                                    ? allBtns.find(b => {
+                                        const t = (b.textContent || '').trim().toLowerCase();
+                                        return t === 'submit' || t.startsWith('submit') || t === 'gönder' || t === 'approve' || t === 'allow' || t === 'confirm';
+                                    })
+                                    : allBtns.find(b => {
+                                        const t = (b.textContent || '').trim().toLowerCase();
+                                        return t === 'skip' || t === 'cancel' || t === 'iptal' || t === 'reject' || t === 'deny';
+                                    });
+                                
+                                if (btnTarget) {
+                                    setTimeout(() => btnTarget.click(), 50);
+                                    return { found: true, method: 'modal_button', target: '${target.title?.substring(0, 30) || 'unknown'}' };
+                                }
+                            }
                             
                             if (radios.length > 0) {
                                 // Check for radio/checkbox modal options by index
