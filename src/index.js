@@ -110,7 +110,7 @@ const TURBO_SAFE_COMMANDS = [
     '/turbo', '/stop', '/screenshot', '/latest', '/status',
     '/quota', '/help', '/version', '/panel', '/menu',
     '/file', '/cmd', '/autoaccept', '/lang', '/window',
-    '/artifacts'
+    '/artifacts', '/restart'
 ];
 const TURBO_SAFE_BUTTONS = [
     '📸', '💬', '📦', '📊', '🚀'
@@ -132,7 +132,10 @@ bot.use(async (ctx, next) => {
             if (isSafeCmd || isSafeBtn) {
                 return next();
             }
-            return ctx.reply(t('turbo.is_running') || '⏳ Turbo Mode is running!');
+            return ctx.reply('⏳ Turbo Mode is currently running! Are you sure you want to stop it?', Markup.inlineKeyboard([
+                [Markup.button.callback('🛑 Force Stop Turbo', 'turbo_force_stop')],
+                [Markup.button.callback('❌ Cancel', 'turbo_cancel')]
+            ]));
         } else if (cbData) {
             if (cbData.startsWith('file_') || cbData.startsWith('artifact_') || cbData.startsWith('turbo_')) {
                 return next();
@@ -140,7 +143,10 @@ bot.use(async (ctx, next) => {
             return ctx.answerCbQuery(t('turbo.is_running_short') || '⏳ Please wait', { show_alert: true }).catch(()=>{});
         } else if (ctx.message?.photo || ctx.message?.document) {
             // Block file/photo uploads during turbo as they trigger sendViaCDP paste
-            return ctx.reply(t('turbo.is_running') || '⏳ Turbo Mode is running!');
+            return ctx.reply('⏳ Turbo Mode is currently running! Are you sure you want to stop it?', Markup.inlineKeyboard([
+                [Markup.button.callback('🛑 Force Stop Turbo', 'turbo_force_stop')],
+                [Markup.button.callback('❌ Cancel', 'turbo_cancel')]
+            ]));
         }
     }
     return next();
@@ -2537,6 +2543,18 @@ async function handleTurbo(ctx) {
 
 bot.command('turbo', handleTurbo);
 bot.hears(/^🚀/i, handleTurbo);
+
+bot.action('turbo_force_stop', async (ctx) => {
+    isTurboRunning = false;
+    isTurboMode = false;
+    saveTurboState();
+    try { stopAgent(CDP_PORT); } catch(e) {}
+    await ctx.editMessageText('🛑 Turbo Mode has been force stopped. You can now send your message.').catch(() => {});
+});
+
+bot.action('turbo_cancel', async (ctx) => {
+    await ctx.deleteMessage().catch(() => {});
+});
 
 // ===== TEXT MESSAGE HANDLER (Headless mode) =====
 
