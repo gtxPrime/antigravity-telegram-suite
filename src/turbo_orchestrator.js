@@ -8,8 +8,9 @@ const {
 const { t } = require('./i18n');
 
 function isQuotaError(text) {
-    if (!text || text.length > 800) return false;
-    const lower = text.toLowerCase();
+    if (!text) return false;
+    const textToCheck = text.length > 2500 ? text.substring(text.length - 2500) : text;
+    const lower = textToCheck.toLowerCase();
     return lower.includes('quota exceeded') ||
            lower.includes('rate limit') ||
            lower.includes('usage limit') ||
@@ -17,7 +18,10 @@ function isQuotaError(text) {
            lower.includes('429 too many requests') ||
            lower.includes('api key') ||
            lower.includes('too many requests') ||
-           lower.includes('limit reached');
+           lower.includes('limit reached') ||
+           lower.includes('insufficient ai credits') ||
+           lower.includes('balance is too low') ||
+           lower.includes('out of credits');
 }
 
 /**
@@ -60,6 +64,9 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
         if (isQuotaError(planText)) {
             console.log('[turbo] Claude quota hit during Phase 1. Falling back to Gemini 3.5 Flash.');
+            await sendViaCDP('reject', CDP_PORT, sentTargetId).catch(() => {});
+            await new Promise(r => setTimeout(r, 500));
+            
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, undefined,
                 t('turbo.p1_fallback') || '🚀 <b>Turbo Mode Active:</b>\n\n⚠️ Claude limit reached.\n⏳ <b>Phase 1:</b> Falling back to Gemini 3.5 Flash for planning...',
@@ -142,6 +149,9 @@ async function runTurboOrchestration(query, CDP_PORT, explicitTargetId, ctx, cre
 
         if (isQuotaError(reviewText)) {
             console.log('[turbo] Claude quota hit during Phase 3. Falling back to Gemini 3.1 Pro.');
+            await sendViaCDP('reject', CDP_PORT, sentTargetId3).catch(() => {});
+            await new Promise(r => setTimeout(r, 500));
+            
             await ctx.telegram.editMessageText(
                 ctx.chat.id, statusMsgId, undefined,
                 t('turbo.p3_fallback') || '🚀 <b>Turbo Mode Active:</b>\n\n✅ <b>Phase 1:</b> Planning\n✅ <b>Phase 2:</b> Coding\n⚠️ Claude limit reached.\n⏳ <b>Phase 3:</b> Falling back to Gemini 3.1 Pro for review...',

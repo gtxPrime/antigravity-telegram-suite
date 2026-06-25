@@ -1106,7 +1106,7 @@ async function sendViaCDP(text, port, specificTargetId = null) {
                                     })
                                     : allBtns.find(b => {
                                         const t = (b.textContent || '').trim().toLowerCase();
-                                        return t === 'skip' || t === 'cancel' || t === 'iptal' || t === 'reject' || t === 'deny';
+                                        return t === 'skip' || t === 'cancel' || t === 'iptal' || t === 'reject' || t === 'deny' || t === 'dismiss';
                                     });
                                 
                                 if (btnTarget) {
