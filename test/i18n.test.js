@@ -40,6 +40,19 @@ assert.deepStrictEqual(
     'Chinese locale keys should match English locale keys'
 );
 
+// Test Korean
+loadLocale('ko');
+assert.strictEqual(getLang(), 'ko', 'Language should be set to ko');
+assert.strictEqual(t('status.running_status'), '🟢 실행 중', 'Korean translation failed');
+assert.strictEqual(t('agent.swipe_to_reply'), '<i>(이 에이전트에 답장하려면 메시지를 왼쪽으로 스와이프하세요)</i>', 'Korean swipe text failed');
+
+const koLocale = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'locales', 'ko.json'), 'utf8'));
+assert.deepStrictEqual(
+    collectKeys(koLocale).sort(),
+    collectKeys(enLocale).sort(),
+    'Korean locale keys should match English locale keys'
+);
+
 // Test fallback / missing
 const missing = t('this.key.does.not.exist');
 assert.strictEqual(missing, 'this.key.does.not.exist', 'Missing key should return the key itself');
@@ -51,3 +64,5 @@ loadLocale('en');
 assert.strictEqual(t('app.error_save'), 'Error: Could not save preference.', 'English error_save missing');
 loadLocale('tr');
 assert.strictEqual(t('app.error_save'), 'Hata: Tercih kaydedilemedi.', 'Turkish error_save missing');
+loadLocale('ko');
+assert.strictEqual(t('app.error_save'), '오류: 선호 설정을 저장할 수 없습니다.', 'Korean error_save missing');

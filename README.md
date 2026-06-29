@@ -4,7 +4,7 @@
 
 **Works with both [Antigravity Standalone App](https://antigravity.google/)\* and [Antigravity IDE](https://antigravity.google/).**
 
-🌍 Languages: [English](README.md) | [Türkçe](README.tr.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md)
+🌍 Languages: [English](README.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Türkçe](README.tr.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md)
 
 Control your Antigravity AI agent remotely via Telegram.
 Send messages, switch AI models, manage workspaces, take screenshots, and run multi-agent workflows — all from your phone.
@@ -40,7 +40,7 @@ Send messages, switch AI models, manage workspaces, take screenshots, and run mu
 | 🔔 **Proactive Notifications** | TaskWatcher detects unsolicited agent messages (timers, sub-agents) and forwards to Telegram |
 | 🤔 **Message Reactions** | Shows 🤔 while processing, clears when done |
 | 🔄 **Auto-Update** | Check for updates and self-update with one command |
-| 🌐 **Multi-Language** | 5 languages supported: English, Turkish, German, Spanish, French |
+| 🌐 **Multi-Language** | 7 languages supported: English, Chinese, Korean, Turkish, German, Spanish, French |
 | ⌨️ **Typing Indicator** | Shows "typing..." in Telegram while the agent is working |
 | 🖥️ **Cross-Platform** | Works on Linux, macOS (Intel & Apple Silicon), and Windows |
 | 🔀 **Dual App Support** | Seamlessly switch between Antigravity IDE and Standalone Agent App |
@@ -83,7 +83,7 @@ IDE_CDP_PORT=9334      # Port for the Antigravity IDE
 # Default AI model to select on new chat
 DEFAULT_MODEL=Gemini 3.1 Pro (High)
 
-# Language: en | tr | de | es | fr
+# Language: en | zh | ko | tr | de | es | fr
 LANGUAGE=en
 
 # Preferred app target: 'agent' (Standalone) or 'ide' (IDE)
@@ -269,6 +269,8 @@ antigravity-telegram-suite/
 │   └── platform.js           # Cross-platform OS abstraction (launch, close, paths)
 ├── locales/
 │   ├── en.json               # English
+│   ├── zh.json               # Chinese (中文)
+│   ├── ko.json               # Korean (한국어)
 │   ├── tr.json               # Turkish
 │   ├── de.json               # German
 │   ├── es.json               # Spanish
@@ -349,6 +351,8 @@ Use `/app` to switch the bot's focus between apps. The `ANTIGRAVITY_PREFERRED_AP
 - **[acmavirus/antigravity-telegram-control](https://github.com/acmavirus/antigravity-telegram-control)** — The open-source Telegram integration that served as the foundation for this project
 - **[yazanbaker94/AntiGravity-AutoAccept](https://github.com/yazanbaker94/AntiGravity-AutoAccept)** — DOM observer pattern inspiration for the Auto-Accept module
 - **[vassoz](https://github.com/vassoz)** — PR #12: Fix CDP connection, X11 display auto-detection, and dynamic port shortcuts
+- **[wade19990814-hue](https://github.com/wade19990814-hue)** — PR #14: Chinese (中文) localization
+- **[ienground](https://github.com/ienground)** — PR #17: Korean (한국어) localization
 
 ## 🌟 Credits & Inspirations
 
