@@ -1,7 +1,9 @@
 const assert = require('assert');
 const { extractLocalImageMarkdown, isLocalImageUrl, isSupportedImagePath, normalizeLocalMediaPath } = require('../src/local_media');
+const { loadLocale } = require('../src/i18n');
 
 function run() {
+    loadLocale('en');
     assert.strictEqual(
         normalizeLocalMediaPath('file:///C:/tmp/%E5%9B%BE%E7%89%87.png'),
         'C:/tmp/图片.png'
@@ -34,10 +36,10 @@ function run() {
         { alt: 'diagram', path: 'D:/work/diagram.svg', type: 'file', original: '![diagram](D:/work/diagram.svg)' },
         { alt: '海面明月与女孩', path: 'https://127.0.0.1:60274/static/artifacts/abc/selene_sea_moon.jpg?csrf=token', type: 'url', original: '![海面明月与女孩](https://127.0.0.1:60274/static/artifacts/abc/selene_sea_moon.jpg?csrf=token)' }
     ]);
-    assert(extracted.text.includes('[📷 截图 已发送到手机]'));
+    assert(extracted.text.includes('[📷 截图 sent to your phone]'));
     assert(extracted.text.includes('![remote](https://example.com/a.png)'));
-    assert(extracted.text.includes('[📷 diagram 已发送到手机]'));
-    assert(extracted.text.includes('[📷 海面明月与女孩 已发送到手机]'));
+    assert(extracted.text.includes('[📷 diagram sent to your phone]'));
+    assert(extracted.text.includes('[📷 海面明月与女孩 sent to your phone]'));
 
     console.log('✅ Local media tests passed!');
 }

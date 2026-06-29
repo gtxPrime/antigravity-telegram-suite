@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "List scheduled tasks",
     "menu_schedule_add_desc": "Add a new scheduled task",
     "menu_schedule_status_desc": "Show CronCrew status"
-  }
+  },
+  "localImageFallback": "Image",
+  "localImageSent": "sent to your phone"
 }

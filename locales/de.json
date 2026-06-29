@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "Geplante Aufgaben auflisten",
     "menu_schedule_add_desc": "Neue geplante Aufgabe hinzufügen",
     "menu_schedule_status_desc": "CronCrew-Status anzeigen"
-  }
+  },
+  "localImageFallback": "Bild",
+  "localImageSent": "an dein Handy gesendet"
 }

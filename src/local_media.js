@@ -1,4 +1,5 @@
 const path = require('path');
+const { t } = require('./i18n');
 
 const IMAGE_EXTENSIONS = new Set([
     '.png', '.jpg', '.jpeg', '.webp', '.gif',
@@ -68,14 +69,14 @@ function extractLocalImageMarkdown(text) {
             return original;
         }
 
-        const label = (alt || '图片').trim() || '图片';
+        const label = (alt || t('localImageFallback')).trim() || t('localImageFallback');
         images.push({
             alt: label,
             path: isLocalUrl ? rawPath.trim() : filePath,
             type: isLocalUrl ? 'url' : 'file',
             original
         });
-        return `[📷 ${label} 已发送到手机]`;
+        return `[📷 ${label} ${t('localImageSent')}]`;
     });
 
     return { text: nextText, images };

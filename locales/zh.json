@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "列出定时任务",
     "menu_schedule_add_desc": "添加新的定时任务",
     "menu_schedule_status_desc": "显示 CronCrew 状态"
-  }
+  },
+  "localImageFallback": "图片",
+  "localImageSent": "已发送到手机"
 }

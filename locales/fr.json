@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "Lister les tâches planifiées",
     "menu_schedule_add_desc": "Ajouter une nouvelle tâche planifiée",
     "menu_schedule_status_desc": "Afficher le statut de CronCrew"
-  }
+  },
+  "localImageFallback": "Image",
+  "localImageSent": "envoyée sur votre téléphone"
 }

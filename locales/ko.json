@@ -408,5 +408,7 @@
     "started": "✅ 새 워크스페이스로 IDE가 시작되었습니다: {workspace}",
     "switching": "🔄 새 워크스페이스 IDE 창 여는 중: {workspace}",
     "trusted": "🔓 워크스페이스가 자동으로 신뢰 상태로 표시되었습니다."
-  }
+  },
+  "localImageFallback": "이미지",
+  "localImageSent": "휴대폰으로 전송됨"
 }

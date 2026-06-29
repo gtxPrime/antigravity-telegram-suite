@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "Zamanlanmış görevleri listele",
     "menu_schedule_add_desc": "Yeni bir zamanlanmış görev ekle",
     "menu_schedule_status_desc": "CronCrew durumunu göster"
-  }
+  },
+  "localImageFallback": "Görsel",
+  "localImageSent": "telefonuna gönderildi"
 }

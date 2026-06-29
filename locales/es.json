@@ -408,5 +408,7 @@
     "menu_schedule_list_desc": "Listar tareas programadas",
     "menu_schedule_add_desc": "Agregar nueva tarea programada",
     "menu_schedule_status_desc": "Mostrar el estado de CronCrew"
-  }
+  },
+  "localImageFallback": "Imagen",
+  "localImageSent": "enviada a tu teléfono"
 }
