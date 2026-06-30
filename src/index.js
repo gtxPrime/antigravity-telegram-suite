@@ -14,7 +14,7 @@ const updater = require('./updater');
 const { runTurboOrchestration } = require('./turbo_orchestrator');
 const TaskWatcher = require('./task_watcher');
 const { extractLocalImageMarkdown } = require('./local_media');
-const { enqueueByKey } = require('./message_queue');
+
 const { ensureCdpReady, isConnectionRefusedError } = require('./cdp_health');
 let scheduleClient = null;
 try {
@@ -68,7 +68,7 @@ function saveMessageTargetMap(map) {
     } catch (err) { console.error('Failed to save messageTargetMap:', err.message); }
 }
 const messageTargetMap = loadMessageTargetMap();
-const textMessageQueues = new Map();
+
 
 const LANG_STATE_FILE = path.join(os.homedir(), '.gemini', 'antigravity', 'lang.txt');
 
@@ -2776,7 +2776,7 @@ bot.action(/^ans_(.+)$/, async (ctx) => {
     }
 });
 
-bot.on('text', (ctx) => {
+bot.on('text', async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
     let query = ctx.message.text;
     
@@ -2793,11 +2793,7 @@ bot.on('text', (ctx) => {
         explicitTargetId = ctx.message.reply_to_message.reply_markup.inline_keyboard[0][0].callback_data.replace('focus_', '');
     }
     
-    const queueKey = ctx.chat?.id ? ctx.chat.id.toString() : 'global';
-
-
-    enqueueByKey(textMessageQueues, queueKey, async () => {
-        try {
+    try {
             if (explicitThreadName) await switchAgentThread(CDP_PORT, explicitThreadName).catch(()=>{});
             let targetId = explicitTargetId;
             let text = "";
@@ -2853,9 +2849,6 @@ bot.on('text', (ctx) => {
             const errorMsg = err.message === 'no_chat_input' ? t('ask.no_chat_input') : err.message;
             ctx.reply(t('ask.headless_error', { error: errorMsg })).catch(() => {});
         }
-    }).catch(err => {
-        console.error('[textQueue] Unhandled queued message error:', err.message);
-    });
 });
 
 // ===== PHOTO & DOCUMENT HANDLER =====
