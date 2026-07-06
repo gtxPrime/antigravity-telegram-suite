@@ -301,7 +301,14 @@ async function startOAuthServer(onCode, onError) {
         logInfo(`[account_manager] OAuth server error: ${err.message}`);
     });
 
-    await new Promise((resolve) => server.listen(boundPort, '127.0.0.1', resolve));
+    await new Promise((resolve, reject) => {
+        const onError = (err) => reject(err);
+        server.once('error', onError);
+        server.listen(boundPort, '127.0.0.1', () => {
+            server.removeListener('error', onError);
+            resolve();
+        });
+    });
 
     return {
         server,
