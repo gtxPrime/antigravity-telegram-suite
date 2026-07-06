@@ -1011,6 +1011,90 @@ async function injectTokenIntoIde(tokenData, app) {
 }
 
 /**
+ * Clear all Google Cloud credentials and onboarding status from the IDE/Agent's state.vscdb.
+ *
+ * @param {string} app - 'ide' or 'agent'
+ * @returns {Promise<string|null>} - Returns the db path if cleared, or null.
+ */
+async function logoutIde(app) {
+    const candidatePaths = getStatevscdbPaths(app);
+    const dbPath = candidatePaths.find(p => fs.existsSync(p));
+
+    if (!dbPath) {
+        return null;
+    }
+
+    const sqlStatements = [
+        "DELETE FROM ItemTable WHERE key='antigravityUnifiedStateSync.oauthToken';",
+        "DELETE FROM ItemTable WHERE key='antigravityUnifiedStateSync.userStatus';",
+        "DELETE FROM ItemTable WHERE key='jetskiStateSync.agentManagerInitState';",
+        "DELETE FROM ItemTable WHERE key='antigravityAuthStatus';",
+        "DELETE FROM ItemTable WHERE key='antigravityOnboarding';",
+        "DELETE FROM ItemTable WHERE key='google.antigravity';"
+    ];
+
+    await runSqliteStatements(dbPath, sqlStatements);
+    return dbPath;
+}
+
+/**
+ * Run a select query or retrieve a single value from the SQLite database.
+ * Tries sqlite3 CLI first, falls back to Python's built-in sqlite3 module.
+ *
+ * @param {string} dbPath
+ * @param {string} sqlQuery
+ * @returns {Promise<string|null>}
+ */
+async function querySqlite(dbPath, sqlQuery) {
+    const sqlite3Available = await checkCommandAvailable('sqlite3');
+    if (sqlite3Available) {
+        return new Promise((resolve) => {
+            const cmd = `sqlite3 "${dbPath}" "${sqlQuery}"`;
+            exec(cmd, { timeout: 5000 }, (err, stdout) => {
+                if (err) resolve(null);
+                else resolve(stdout ? stdout.trim() : null);
+            });
+        });
+    }
+    const pythonCmd = await resolvePythonCommand();
+    if (pythonCmd) {
+        return new Promise((resolve) => {
+            const pyScript = `import sqlite3; conn = sqlite3.connect("${dbPath.replace(/\\/g, '/')}"); c = conn.cursor(); c.execute("${sqlQuery.replace(/"/g, '\\"')}"); row = c.fetchone(); print(row[0] if row else "")`;
+            exec(`${pythonCmd} -c "${pyScript}"`, { timeout: 5000 }, (err, stdout) => {
+                if (err) resolve(null);
+                else resolve(stdout ? stdout.trim() : null);
+            });
+        });
+    }
+    return null;
+}
+
+/**
+ * Retrieve the active Google account email from the IDE/Agent's state.vscdb.
+ *
+ * @param {string} app - 'ide' or 'agent'
+ * @returns {Promise<string|null>}
+ */
+async function getActiveEmail(app) {
+    const candidatePaths = getStatevscdbPaths(app);
+    const dbPath = candidatePaths.find(p => fs.existsSync(p));
+    if (!dbPath) {
+        return null;
+    }
+
+    const val = await querySqlite(dbPath, "SELECT value FROM ItemTable WHERE key='antigravityAuthStatus';");
+    if (!val) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(val);
+        return parsed.email || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
  * Run SQL statements against a SQLite database.
  * Tries sqlite3 CLI first, falls back to Python's built-in sqlite3 module.
  *
@@ -1264,6 +1348,8 @@ module.exports = {
     fetchProjectContext,
     ensureFreshToken,
     injectTokenIntoIde,
+    logoutIde,
+    getActiveEmail,
     writeToCredentialStore,
     getStatevscdbPaths,
     OAUTH_PORT,

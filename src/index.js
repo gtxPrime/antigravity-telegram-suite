@@ -4394,16 +4394,38 @@ bot.action(/^delacc_confirm_(\d+)$/, async (ctx) => {
         ).catch(() => {});
     }
 
+    const email = account.email;
+
+    // Check and log out from active IDE/Agent if the email matches
+    let loggedOutApps = [];
+    for (const app of ['ide', 'agent']) {
+        try {
+            const activeEmail = await accountManager.getActiveEmail(app);
+            if (activeEmail && activeEmail.toLowerCase() === email.toLowerCase()) {
+                await accountManager.logoutIde(app);
+                loggedOutApps.push(app.toUpperCase());
+            }
+        } catch (e) {
+            console.error(`[delacc logout] Error checking/logging out of ${app}:`, e.message);
+        }
+    }
+
     delete accounts[String(numericId)];
     accountManager.saveAccounts(accounts);
 
     const remaining = Object.keys(accounts).length;
+    
+    let logoutNote = '';
+    if (loggedOutApps.length > 0) {
+        logoutNote = `\n🔓 <b>Session Invalidated</b>: Logged out active session in ${loggedOutApps.join(' & ')}.\n`;
+    }
+
     await ctx.editMessageText(
         [
             `🗑 <b>Account #${numericId} deleted</b>`,
             '━'.repeat(22),
-            `📧 ${account.email}`,
-            '',
+            `📧 ${email}`,
+            logoutNote,
             remaining > 0
                 ? `${remaining} account${remaining !== 1 ? 's' : ''} remaining. Use /accounts to view them.`
                 : 'No accounts remain. Use /login to add one.',
@@ -4421,7 +4443,6 @@ bot.action(/^delacc_cancel_(\d+)$/, async (ctx) => {
             '',
             'Account was not deleted.',
         ].join('\n'),
-        { parse_mode: 'HTML' }
     ).catch(() => {});
 });
 
