@@ -25,7 +25,7 @@ const ACTIVE_OAUTH_CLIENT_ENV = 'ANTIGRAVITY_OAUTH_CLIENT_KEY';
 const DEFAULT_OAUTH_CLIENT_KEY = 'antigravity_enterprise';
 
 const BUILTIN_CLIENT_ID = Buffer.from('MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ==', 'base64').toString('utf8');
-const BUILTIN_CLIENT_SECRET = Buffer.from('R0NTUFgtSzU4RldSNDg2TGRMSjFtTEI4c1hDNHo2cURBZg==', 'base64').toString('utf8');
+const BUILTIN_CLIENT_SECRET = Buffer.from('R09DU1BYLUs1OEZXUjQ4NkxkTEoxbUxCOHNYQzR6NnFEQWY=', 'base64').toString('utf8');
 
 function normalizeClientKey(key) {
     return (key || '').trim().toLowerCase();
