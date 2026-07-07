@@ -27,6 +27,10 @@ try {
 const TURBO_STATE_FILE = path.join(os.homedir(), '.gemini', 'antigravity', 'turbo_state.json');
 const RESTART_FLAG_FILE = path.join(os.homedir(), '.gemini', 'antigravity', '.restart_pending');
 
+function escHtml(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function loadTurboState() {
     try {
         if (fs.existsSync(TURBO_STATE_FILE)) {
@@ -4268,7 +4272,7 @@ bot.action(/^acc_switch_(\d+)$/, async (ctx) => {
     } catch (e) {
         console.error('[acc_switch] Error:', e.message);
         steps.push('━'.repeat(22));
-        steps.push(t('switchacc.error', { error: e.message }));
+        steps.push(t('switchacc.error', { error: escHtml(e.message) }));
         await editStatus(buildSwitchStatus(account, steps));
     }
 });
@@ -4302,7 +4306,7 @@ bot.action(/^acc_info_(\d+)$/, async (ctx) => {
 
         await ctx.editMessageText(text, { parse_mode: 'HTML', ...backBtn }).catch(() => {});
     } catch (e) {
-        await ctx.editMessageText(`❌ ${e.message}`, { parse_mode: 'HTML' }).catch(() => {});
+        await ctx.editMessageText(`❌ <code>${escHtml(e.message)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
     }
 });
 
@@ -4528,7 +4532,7 @@ bot.command('switchacc', async (ctx) => {
     } catch (e) {
         console.error('[/switchacc] Error:', e.message);
         steps.push('━'.repeat(22));
-        steps.push(t('switchacc.error', { error: e.message }));
+        steps.push(t('switchacc.error', { error: escHtml(e.message) }));
         await editStatus(buildSwitchStatus(account, steps));
     }
 });

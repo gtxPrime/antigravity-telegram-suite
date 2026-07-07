@@ -1047,10 +1047,11 @@ async function logoutIde(app) {
  */
 async function querySqlite(dbPath, sqlQuery) {
     const sqlite3Available = await checkCommandAvailable('sqlite3');
+    const { execFile: execFileCb } = require('child_process');
+    
     if (sqlite3Available) {
         return new Promise((resolve) => {
-            const cmd = `sqlite3 "${dbPath}" "${sqlQuery}"`;
-            exec(cmd, { timeout: 5000 }, (err, stdout) => {
+            execFileCb('sqlite3', [dbPath, sqlQuery], { timeout: 5000 }, (err, stdout) => {
                 if (err) resolve(null);
                 else resolve(stdout ? stdout.trim() : null);
             });
